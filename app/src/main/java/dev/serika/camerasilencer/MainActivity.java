@@ -1,4 +1,4 @@
-package dev.masato.pixelcamerasilencer;
+package dev.serika.camerasilencer;
 
 import android.Manifest;
 import android.app.Activity;

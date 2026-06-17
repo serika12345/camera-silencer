@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "PixelCameraSilencer"
+rootProject.name = "CameraSilencer"
 include ":app"

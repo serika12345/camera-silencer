@@ -1,4 +1,4 @@
-package dev.masato.pixelcamerasilencer;
+package dev.serika.camerasilencer;
 
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -19,9 +19,9 @@ import java.util.HashSet;
 import java.util.Set;
 
 public final class CameraGuardService extends Service {
-    static final String ACTION_START = "dev.masato.pixelcamerasilencer.action.START";
-    static final String ACTION_STOP = "dev.masato.pixelcamerasilencer.action.STOP";
-    static final String ACTION_STATE = "dev.masato.pixelcamerasilencer.action.STATE";
+    static final String ACTION_START = "dev.serika.camerasilencer.action.START";
+    static final String ACTION_STOP = "dev.serika.camerasilencer.action.STOP";
+    static final String ACTION_STATE = "dev.serika.camerasilencer.action.STATE";
     static final String EXTRA_RUNNING = "running";
     static final String EXTRA_SILENCING = "silencing";
 

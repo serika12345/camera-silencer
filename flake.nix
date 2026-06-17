@@ -52,7 +52,7 @@
             JAVA_HOME = pkgs.jdk17.home;
 
             shellHook = ''
-              echo "Pixel Camera Silencer dev shell"
+              echo "Camera Silencer dev shell"
               echo "  gradle :app:assembleDebug"
               echo "  adb install -r app/build/outputs/apk/debug/app-debug.apk"
             '';

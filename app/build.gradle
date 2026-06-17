@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace "dev.masato.pixelcamerasilencer"
+    namespace "dev.serika.camerasilencer"
     compileSdk 36
 
     defaultConfig {
-        applicationId "dev.masato.pixelcamerasilencer"
+        applicationId "dev.serika.camerasilencer"
         minSdk 26
         targetSdk 36
         versionCode 1
