@@ -22,7 +22,7 @@ Android 端末でカメラ利用中にカメラアプリのシャッター音を
 
 ## ビルド
 
-この repo のルートディレクトリを正の作業ディレクトリとして扱います。
+このリポジトリ直下にcdして下記を実行してください。
 
 ```sh
 nix develop --command gradle :app:assembleDebug
