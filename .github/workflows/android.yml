@@ -25,7 +25,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build debug APK
+    name: Build release APK
     runs-on: ubuntu-latest
 
     steps:
@@ -37,8 +37,36 @@ jobs:
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Prepare optional release signing
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_SIGNING_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${KEYSTORE_BASE64}${STORE_PASSWORD}${KEY_ALIAS}${KEY_PASSWORD}" ]]; then
+            echo "Release signing secrets are not configured; building an unsigned release APK."
+            exit 0
+          fi
+
+          if [[ -z "${KEYSTORE_BASE64}" || -z "${STORE_PASSWORD}" || -z "${KEY_ALIAS}" || -z "${KEY_PASSWORD}" ]]; then
+            echo "Release signing is partially configured. Set all ANDROID_SIGNING_* secrets or none of them." >&2
+            exit 1
+          fi
+
+          mkdir -p "${RUNNER_TEMP}/signing"
+          printf '%s' "${KEYSTORE_BASE64}" | base64 -d > "${RUNNER_TEMP}/signing/release.keystore"
+          echo "ANDROID_KEYSTORE_PATH=${RUNNER_TEMP}/signing/release.keystore" >> "${GITHUB_ENV}"
+
       - name: Build
-        run: nix develop --command gradle :app:assembleDebug
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_SIGNING_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}
+        run: nix develop --command gradle :app:assembleRelease
 
       - name: Package artifact
         shell: bash
@@ -46,8 +74,23 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           safe_ref_name="$(printf '%s' "${GITHUB_REF_NAME:-manual}" | tr '/[:space:]' '-')"
-          apk_name="camera-silencer-${safe_ref_name}.apk"
-          cp app/build/outputs/apk/debug/app-debug.apk "dist/${apk_name}"
+
+          shopt -s nullglob
+          apks=(app/build/outputs/apk/release/*.apk)
+          if [[ "${#apks[@]}" -ne 1 ]]; then
+            echo "Expected exactly one release APK, found ${#apks[@]}" >&2
+            printf '%s\n' "${apks[@]}" >&2
+            exit 1
+          fi
+
+          apk_path="${apks[0]}"
+          apk_kind="release"
+          if [[ "$(basename "${apk_path}")" == *unsigned* ]]; then
+            apk_kind="release-unsigned"
+          fi
+
+          apk_name="camera-silencer-${safe_ref_name}-${apk_kind}.apk"
+          cp "${apk_path}" "dist/${apk_name}"
           sha256sum "dist/${apk_name}" > "dist/${apk_name}.sha256"
 
       - name: Upload artifact
@@ -107,5 +150,5 @@ jobs:
               --repo "${GITHUB_REPOSITORY}" \
               --target "${GITHUB_SHA}" \
               --title "${RELEASE_TAG}" \
-              --notes "Automated APK build for ${RELEASE_TAG}."
+              --notes "Automated release build for ${RELEASE_TAG}. If the APK name contains release-unsigned, it is intended for F-Droid-style repository signing and is not directly installable until signed."
           fi

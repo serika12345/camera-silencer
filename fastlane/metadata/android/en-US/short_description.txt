@@ -1,0 +1,1 @@
+Reduce camera audio only while a camera is active

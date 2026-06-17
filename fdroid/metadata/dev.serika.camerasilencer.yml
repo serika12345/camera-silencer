@@ -1,0 +1,33 @@
+Categories:
+  - System
+License: MIT
+AuthorName: Serika
+SourceCode: https://github.com/serika12345/camera-silencer
+IssueTracker: https://github.com/serika12345/camera-silencer/issues
+Changelog: https://github.com/serika12345/camera-silencer/releases
+AutoName: Camera Silencer
+Summary: Reduce camera audio while a camera is active
+Description: |-
+  Camera Silencer detects camera use through Android's public camera
+  availability API and temporarily reduces audio output while a camera is
+  active.
+
+  It does not request camera, internet, accessibility, usage access, overlay,
+  or DND policy permissions.
+
+  Effectiveness depends on the device, OS build, region configuration, and
+  camera app implementation. Some camera apps may use enforced audio paths that
+  cannot be suppressed reliably with normal app permissions.
+
+RepoType: git
+Repo: https://github.com/serika12345/camera-silencer.git
+Builds:
+  - versionName: 0.1.1
+    versionCode: 2
+    commit: v0.1.1
+    gradle:
+      - yes
+AutoUpdateMode: Version v%v
+UpdateCheckMode: Tags
+CurrentVersion: 0.1.1
+CurrentVersionCode: 2

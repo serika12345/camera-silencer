@@ -1,0 +1,3 @@
+Build release APKs for F-Droid-style distribution.
+Add Fastlane and F-Droid metadata.
+Support optional release signing through CI secrets.

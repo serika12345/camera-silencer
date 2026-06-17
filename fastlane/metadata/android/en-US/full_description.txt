@@ -1,0 +1,18 @@
+Camera Silencer monitors Android camera availability and temporarily reduces audio output only while another app is using a camera.
+
+It is designed for devices and camera apps where public Android audio APIs can suppress or reduce shutter sounds without root access.
+
+Features:
+- No camera permission
+- No internet permission
+- No accessibility service
+- No usage access
+- No overlay permission
+- No DND policy access
+- Foreground service restores audio when the camera is released
+- Optional modes for silent/vibrate-following, always-on camera silencing, and manual control
+
+Limitations:
+- Effectiveness depends on the device, OS build, region configuration, and camera app implementation.
+- Some camera apps may use enforced audio paths that cannot be suppressed reliably with normal app permissions.
+- If suppression stops working after the camera app was opened first, force stop the camera app once and start Camera Silencer before opening the camera again.

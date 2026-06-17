@@ -1,0 +1,3 @@
+F-Droid 系配布向けの release APK ビルドに変更しました。
+Fastlane/F-Droid metadata を追加しました。
+CI secrets による任意の release 署名に対応しました。

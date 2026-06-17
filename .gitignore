@@ -6,3 +6,6 @@ local.properties
 captures/
 *.iml
 app/build/
+*.jks
+*.keystore
+release-key.properties

@@ -6,11 +6,49 @@ android {
     namespace "dev.serika.camerasilencer"
     compileSdk 36
 
+    def releaseSigningConfigured = [
+            System.getenv("ANDROID_KEYSTORE_PATH"),
+            System.getenv("ANDROID_KEYSTORE_PASSWORD"),
+            System.getenv("ANDROID_KEY_ALIAS"),
+            System.getenv("ANDROID_KEY_PASSWORD")
+    ].every { it != null && !it.isBlank() }
+
     defaultConfig {
         applicationId "dev.serika.camerasilencer"
         minSdk 26
         targetSdk 36
-        versionCode 1
-        versionName "0.1.0"
+        versionCode 2
+        versionName "0.1.1"
+    }
+
+    signingConfigs {
+        if (releaseSigningConfigured) {
+            release {
+                storeFile file(System.getenv("ANDROID_KEYSTORE_PATH"))
+                storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword System.getenv("ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false
+            if (releaseSigningConfigured) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    dependenciesInfo {
+        includeInApk false
+        includeInBundle false
     }
 }

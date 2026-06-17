@@ -34,18 +34,48 @@ nix develop --command gradle :app:assembleDebug
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## GitHub Actions
-
-`main` への push と pull request で debug APK をビルドし、workflow artifact として保存します。
-
-`v*` タグを push すると、同じ debug APK と SHA-256 ファイルを GitHub Releases に配置します。
+F-Droid 系の配布・検証向け release APK:
 
 ```sh
-git tag v0.1.0
-git push origin v0.1.0
+nix develop --command gradle :app:assembleRelease
 ```
 
-Actions 画面から `Android` workflow を手動実行し、`release_tag` に `v0.1.0` のようなタグを指定して Release を作成することもできます。`release_tag` を空にした場合はビルドのみ実行します。
+署名鍵を指定しない場合、生成される APK は unsigned です。F-Droid 本家のようにリポジトリ側でビルドして署名する配布形態では、この状態が前提になります。
+
+```text
+app/build/outputs/apk/release/app-release-unsigned.apk
+```
+
+## GitHub Actions
+
+`main` への push と pull request で release APK をビルドし、workflow artifact として保存します。
+
+`v*` タグを push すると、同じ release APK と SHA-256 ファイルを GitHub Releases に配置します。
+
+```sh
+git tag v0.1.1
+git push origin v0.1.1
+```
+
+Actions 画面から `Android` workflow を手動実行し、`release_tag` に `v0.1.1` のようなタグを指定して Release を作成することもできます。`release_tag` を空にした場合はビルドのみ実行します。
+
+GitHub Releases に直接インストール可能な signed APK を置きたい場合は、リポジトリ secrets に以下を設定してください。未設定の場合は F-Droid 系の署名処理向けに `release-unsigned` APK を配置します。
+
+- `ANDROID_SIGNING_KEYSTORE_BASE64`
+- `ANDROID_SIGNING_STORE_PASSWORD`
+- `ANDROID_SIGNING_KEY_ALIAS`
+- `ANDROID_SIGNING_KEY_PASSWORD`
+
+## F-Droid 系配布
+
+このリポジトリは F-Droid 系の配布を想定して、以下を含めています。
+
+- `assembleRelease` で unsigned release APK を生成
+- F-Droid/IzzyOnDroid 系が参照できる Fastlane metadata: `fastlane/metadata/android/`
+- fdroiddata へ提出するための下書き metadata: `fdroid/metadata/dev.serika.camerasilencer.yml`
+- Play Services、Firebase、広告、解析 SDK、外部通信なし
+
+F-Droid 本家へ提出する場合は、`fdroid/metadata/dev.serika.camerasilencer.yml` を fdroiddata 側の `metadata/dev.serika.camerasilencer.yml` として調整し、タグ `v0.1.1` 以降をビルド対象にしてください。
 
 ## インストール
 
