@@ -5,9 +5,9 @@ This repository is prepared for F-Droid-style distribution.
 ## Current App Metadata
 
 - Application ID: `dev.serika.camerasilencer`
-- Current version: `0.1.1`
-- Current version code: `2`
-- Source tag: `v0.1.1`
+- Current version: `0.1.2`
+- Current version code: `3`
+- Source tag: `v0.1.2`
 - Metadata draft: `fdroid/metadata/dev.serika.camerasilencer.yml`
 - Fastlane metadata: `fastlane/metadata/android/`
 
@@ -72,7 +72,7 @@ Upstream source:
 https://github.com/serika12345/camera-silencer
 
 Release tag:
-v0.1.1
+v0.1.2
 
 Notes:
 - MIT licensed

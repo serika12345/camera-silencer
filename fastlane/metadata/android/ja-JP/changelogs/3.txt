@@ -1,0 +1,2 @@
+F-Droid のビルド基盤向けに Gradle wrapper metadata を追加しました。
+F-Droid metadata を現在の schema に合わせました。

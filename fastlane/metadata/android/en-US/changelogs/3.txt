@@ -1,0 +1,2 @@
+Add Gradle wrapper metadata for F-Droid build infrastructure.
+Update F-Droid metadata to current schema.
