@@ -34,6 +34,19 @@ nix develop --command gradle :app:assembleDebug
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
+## GitHub Actions
+
+`main` への push と pull request で debug APK をビルドし、workflow artifact として保存します。
+
+`v*` タグを push すると、同じ debug APK と SHA-256 ファイルを GitHub Releases に配置します。
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Actions 画面から `Android` workflow を手動実行し、`release_tag` に `v0.1.0` のようなタグを指定して Release を作成することもできます。`release_tag` を空にした場合はビルドのみ実行します。
+
 ## インストール
 
 ```sh
