@@ -46,6 +46,10 @@ final class OutputMixGuard {
         abandonFocus();
     }
 
+    synchronized void release() {
+        disable();
+    }
+
     private void requestFocus() {
         if (audioManager == null) {
             return;

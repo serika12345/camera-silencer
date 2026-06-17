@@ -5,10 +5,13 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.ServiceInfo;
 import android.hardware.camera2.CameraManager;
+import android.media.AudioManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -20,10 +23,15 @@ import java.util.Set;
 
 public final class CameraGuardService extends Service {
     static final String ACTION_START = "dev.serika.camerasilencer.action.START";
+    static final String ACTION_START_FOR_CURRENT_MODE =
+            "dev.serika.camerasilencer.action.START_FOR_CURRENT_MODE";
     static final String ACTION_STOP = "dev.serika.camerasilencer.action.STOP";
     static final String ACTION_STATE = "dev.serika.camerasilencer.action.STATE";
     static final String EXTRA_RUNNING = "running";
     static final String EXTRA_SILENCING = "silencing";
+    static final String EXTRA_MODE = "mode";
+    static final String EXTRA_CAMERA_IN_USE = "camera_in_use";
+    static final String EXTRA_RINGER_SILENT = "ringer_silent";
 
     private static final String TAG = "CameraGuardService";
     private static final String CHANNEL_ID = "camera_guard";
@@ -34,8 +42,10 @@ public final class CameraGuardService extends Service {
     private HandlerThread callbackThread;
     private Handler callbackHandler;
     private CameraManager cameraManager;
+    private AudioManager audioManager;
     private AudioSilencer audioSilencer;
     private boolean registered;
+    private boolean ringerReceiverRegistered;
 
     private final CameraManager.AvailabilityCallback availabilityCallback =
             new CameraManager.AvailabilityCallback() {
@@ -58,17 +68,39 @@ public final class CameraGuardService extends Service {
                 }
             };
 
+    private final BroadcastReceiver ringerModeReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            Log.w(TAG, "Ringer mode changed");
+            updateSilencing();
+        }
+    };
+
     public static void start(Context context) {
-        Intent intent = new Intent(context, CameraGuardService.class).setAction(ACTION_START);
+        GuardSettings.setMode(context, GuardSettings.MODE_MANUAL);
+        GuardSettings.setManualRunning(context, true);
+        startServiceCompat(context, ACTION_START);
+    }
+
+    static void startForCurrentMode(Context context) {
+        if (GuardSettings.shouldRunService(context)) {
+            startServiceCompat(context, ACTION_START_FOR_CURRENT_MODE);
+        }
+    }
+
+    public static void stop(Context context) {
+        GuardSettings.setMode(context, GuardSettings.MODE_MANUAL);
+        GuardSettings.setManualRunning(context, false);
+        context.startService(new Intent(context, CameraGuardService.class).setAction(ACTION_STOP));
+    }
+
+    private static void startServiceCompat(Context context, String action) {
+        Intent intent = new Intent(context, CameraGuardService.class).setAction(action);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             context.startForegroundService(intent);
         } else {
             context.startService(intent);
         }
-    }
-
-    public static void stop(Context context) {
-        context.startService(new Intent(context, CameraGuardService.class).setAction(ACTION_STOP));
     }
 
     @Override
@@ -79,6 +111,7 @@ public final class CameraGuardService extends Service {
         audioSilencer = new AudioSilencer(this);
         AudioSilencer.restorePersistedSnapshot(this);
         cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
+        audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         callbackThread = new HandlerThread("camera-availability");
         callbackThread.start();
         callbackHandler = new Handler(callbackThread.getLooper());
@@ -89,13 +122,22 @@ public final class CameraGuardService extends Service {
         String action = intent == null ? ACTION_START : intent.getAction();
         Log.w(TAG, "onStartCommand action=" + action);
         if (ACTION_STOP.equals(action)) {
+            GuardSettings.setMode(this, GuardSettings.MODE_MANUAL);
+            GuardSettings.setManualRunning(this, false);
             stopGuard();
             stopSelf();
             return START_NOT_STICKY;
         }
 
-        startForegroundCompat(buildNotification(false));
+        if (!GuardSettings.shouldRunService(this)) {
+            stopGuard();
+            stopSelf();
+            return START_NOT_STICKY;
+        }
+
+        startForegroundCompat(buildNotification(false, false));
         startGuard();
+        updateSilencing();
         return START_STICKY;
     }
 
@@ -128,6 +170,7 @@ public final class CameraGuardService extends Service {
                 cameraManager.registerAvailabilityCallback(availabilityCallback, callbackHandler);
             }
             registered = true;
+            registerRingerModeReceiver();
             publishState();
             Log.w(TAG, "Camera availability callback registered");
         } catch (RuntimeException e) {
@@ -145,25 +188,26 @@ public final class CameraGuardService extends Service {
             }
         }
         registered = false;
+        unregisterRingerModeReceiver();
 
         synchronized (unavailableCameraIds) {
             unavailableCameraIds.clear();
         }
         if (audioSilencer != null) {
-            audioSilencer.disable();
+            audioSilencer.shutdown();
         }
         publishState();
     }
 
     private void updateSilencing() {
-        boolean cameraInUse;
-        synchronized (unavailableCameraIds) {
-            cameraInUse = !unavailableCameraIds.isEmpty();
-        }
+        boolean cameraInUse = isCameraInUse();
+        boolean shouldSilence = cameraInUse && shouldSilenceForCurrentMode();
         Log.w(TAG, "updateSilencing cameraInUse=" + cameraInUse
+                + " shouldSilence=" + shouldSilence
+                + " mode=" + GuardSettings.getMode(this)
                 + " unavailable=" + unavailableCameraIds);
 
-        if (cameraInUse) {
+        if (shouldSilence) {
             audioSilencer.enable();
         } else {
             audioSilencer.disable();
@@ -171,7 +215,7 @@ public final class CameraGuardService extends Service {
 
         NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (manager != null) {
-            manager.notify(NOTIFICATION_ID, buildNotification(cameraInUse));
+            manager.notify(NOTIFICATION_ID, buildNotification(cameraInUse, shouldSilence));
         }
         publishState();
     }
@@ -187,7 +231,10 @@ public final class CameraGuardService extends Service {
         Intent state = new Intent(ACTION_STATE)
                 .setPackage(getPackageName())
                 .putExtra(EXTRA_RUNNING, registered)
-                .putExtra(EXTRA_SILENCING, active);
+                .putExtra(EXTRA_SILENCING, active)
+                .putExtra(EXTRA_MODE, GuardSettings.getMode(this))
+                .putExtra(EXTRA_CAMERA_IN_USE, isCameraInUse())
+                .putExtra(EXTRA_RINGER_SILENT, isRingerSilent());
         sendBroadcast(state);
     }
 
@@ -203,6 +250,15 @@ public final class CameraGuardService extends Service {
                 .getBoolean(EXTRA_SILENCING, false);
     }
 
+    static void clearSavedState(Context context) {
+        context.getApplicationContext()
+                .getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(EXTRA_RUNNING, false)
+                .putBoolean(EXTRA_SILENCING, false)
+                .apply();
+    }
+
     private void startForegroundCompat(Notification notification) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(
@@ -215,7 +271,7 @@ public final class CameraGuardService extends Service {
         }
     }
 
-    private Notification buildNotification(boolean cameraInUse) {
+    private Notification buildNotification(boolean cameraInUse, boolean silencing) {
         Intent openIntent = new Intent(this, MainActivity.class);
         PendingIntent contentIntent = PendingIntent.getActivity(
                 this,
@@ -231,10 +287,18 @@ public final class CameraGuardService extends Service {
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
         );
 
-        String title = cameraInUse ? "Camera in use" : "Watching camera use";
-        String text = cameraInUse
-                ? "Audio is temporarily reduced"
-                : "Audio will be reduced only while a camera is active";
+        String modeLabel = GuardSettings.labelFor(GuardSettings.getMode(this));
+        String title = silencing
+                ? "Silencing camera audio"
+                : cameraInUse ? "Camera in use" : "Watching camera use";
+        String text;
+        if (silencing) {
+            text = "Audio is temporarily reduced";
+        } else if (cameraInUse && GuardSettings.MODE_FOLLOW_RINGER.equals(GuardSettings.getMode(this))) {
+            text = "Ringer is audible; audio is unchanged";
+        } else {
+            text = "Mode: " + modeLabel;
+        }
 
         Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 ? new Notification.Builder(this, CHANNEL_ID)
@@ -249,6 +313,65 @@ public final class CameraGuardService extends Service {
                 .setShowWhen(false)
                 .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopIntent)
                 .build();
+    }
+
+    private void registerRingerModeReceiver() {
+        if (ringerReceiverRegistered) {
+            return;
+        }
+
+        IntentFilter filter = new IntentFilter(AudioManager.RINGER_MODE_CHANGED_ACTION);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(ringerModeReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(ringerModeReceiver, filter);
+        }
+        ringerReceiverRegistered = true;
+    }
+
+    private void unregisterRingerModeReceiver() {
+        if (!ringerReceiverRegistered) {
+            return;
+        }
+
+        try {
+            unregisterReceiver(ringerModeReceiver);
+        } catch (RuntimeException e) {
+            Log.d(TAG, "Ringer receiver unregister failed", e);
+        }
+        ringerReceiverRegistered = false;
+    }
+
+    private boolean shouldSilenceForCurrentMode() {
+        String mode = GuardSettings.getMode(this);
+        if (GuardSettings.MODE_ALWAYS.equals(mode)) {
+            return true;
+        }
+        if (GuardSettings.MODE_FOLLOW_RINGER.equals(mode)) {
+            return isRingerSilent();
+        }
+        return GuardSettings.isManualRunning(this);
+    }
+
+    private boolean isCameraInUse() {
+        synchronized (unavailableCameraIds) {
+            return !unavailableCameraIds.isEmpty();
+        }
+    }
+
+    private boolean isRingerSilent() {
+        if (audioManager == null) {
+            return false;
+        }
+
+        try {
+            int ringerMode = audioManager.getRingerMode();
+            return ringerMode == AudioManager.RINGER_MODE_SILENT
+                    || ringerMode == AudioManager.RINGER_MODE_VIBRATE;
+        } catch (RuntimeException e) {
+            Log.d(TAG, "getRingerMode failed", e);
+            return false;
+        }
     }
 
     private void createNotificationChannel() {

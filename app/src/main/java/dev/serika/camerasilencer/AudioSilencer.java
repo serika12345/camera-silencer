@@ -69,6 +69,7 @@ final class AudioSilencer {
 
     synchronized void disable() {
         if (snapshot == null || audioManager == null) {
+            outputMixGuard.disable();
             return;
         }
 
@@ -78,6 +79,11 @@ final class AudioSilencer {
         old.restore(audioManager);
         prefs.edit().clear().apply();
         Log.w(TAG, "Audio guard disabled");
+    }
+
+    synchronized void shutdown() {
+        disable();
+        outputMixGuard.release();
     }
 
     private void applyMutedStream(int stream) {
