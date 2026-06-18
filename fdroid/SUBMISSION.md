@@ -7,7 +7,8 @@ This repository is prepared for F-Droid-style distribution.
 - Application ID: `dev.serika.camerasilencer`
 - Current version: `0.1.2`
 - Current version code: `3`
-- Source tag: `v0.1.2`
+- Source commit: `96a6961bd07314679a9fcaff72e771548d4d1778`
+- F-Droid build subdir: `app`
 - Metadata draft: `fdroid/metadata/dev.serika.camerasilencer.yml`
 - Fastlane metadata: `fastlane/metadata/android/`
 
@@ -58,26 +59,17 @@ Then open a merge request:
 - Source: `<your-gitlab-user>/fdroiddata:dev.serika.camerasilencer`
 - Target: `fdroid/fdroiddata:master`
 
-## Merge Request Text
+## Merge Request Description
 
-```text
-Add Camera Silencer (dev.serika.camerasilencer)
+Use GitLab's `App Inclusion` description template.
 
-Camera Silencer detects Android camera availability and temporarily reduces
-audio output while a camera is active. It uses only public Android APIs and does
-not request camera, internet, accessibility, usage access, overlay, or DND
-policy permissions.
+In the merge request editor:
 
-Upstream source:
-https://github.com/serika12345/camera-silencer
-
-Release tag:
-v0.1.2
-
-Notes:
-- MIT licensed
-- Java-only Android app
-- No proprietary SDKs, trackers, ads, Firebase, or Play Services
-- Fastlane metadata is included upstream
-- GitHub Actions builds the release variant
-```
+1. Choose the `App Inclusion` template.
+2. Read the template instructions and check the task boxes after verifying them.
+3. Do not add separate summary or description text in the merge request body.
+   F-Droid should pull store listing text from upstream
+   `fastlane/metadata/android/`.
+4. Confirm the metadata uses the full commit hash
+   `96a6961bd07314679a9fcaff72e771548d4d1778`, not a tag or branch.
+5. Confirm `subdir: app` is set in the build block and `output` is absent.
