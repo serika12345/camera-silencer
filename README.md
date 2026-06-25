@@ -10,7 +10,7 @@ Android 端末でカメラ利用中にカメラアプリのシャッター音を
 - **起動時に再アーム**: Always / Follow silent のモードでは再起動後に再有効化通知を表示
 - **動作モード選択**: 端末の消音/バイブ連動、カメラ中は常時消音、手動制御を選択可能
 - **シンプル**: 手動モードではアプリを開いて手動ガードのトグルを押すだけ
-- **安全**: カメラ権限不要。インターネット接続なし
+- **安全**: カメラ権限不要。使用状況アクセスは任意で、許可時は前面カメラアプリ確認に限定。インターネット接続なし
 - **復旧可能**: 音量がおかしくなった場合は、アプリから「Restore audio now」ボタンで復元
 
 ## 対応機器
@@ -90,6 +90,12 @@ Android 13 以上で通知権限を手動付与する場合:
 nix develop --command adb shell pm grant dev.serika.camerasilencer android.permission.POST_NOTIFICATIONS
 ```
 
+より正確なカメラアプリ判定のために Usage Access を許可できます。テスト端末で adb から付与する場合:
+
+```sh
+nix develop --command adb shell appops set dev.serika.camerasilencer GET_USAGE_STATS allow
+```
+
 その後、カメラアプリを開いて動作確認します。
 
 ## 使い方
@@ -103,10 +109,11 @@ nix develop --command adb shell pm grant dev.serika.camerasilencer android.permi
 ### 手動モードの有効化
 
 1. **Camera Silencer** を開く
-2. **Manual control** を選ぶ
-3. 手動ガードのトグルをタップして **「Start manual guard」** から **「Stop manual guard」** に切り替える
-4. ステータスに **「Watching camera use」** と表示されたら準備完了
-5. カメラアプリを開く → シャッター音が消えます
+2. 必要なら **Usage access settings** を開き、Camera Silencer の使用状況アクセスを許可する
+3. **Manual control** を選ぶ
+4. 手動ガードのトグルをタップして **「Start manual guard」** から **「Stop manual guard」** に切り替える
+5. ステータスに **「Watching camera use」** と表示されたら準備完了
+6. カメラアプリを開く → シャッター音が消えます
 
 ### 無効化
 
@@ -127,6 +134,7 @@ nix develop --command adb shell pm grant dev.serika.camerasilencer android.permi
 
 **Q: 他のアプリに影響しますか？**
 - A: カメラ使用中だけシステム系の音声設定を一時的に変更し、終了時に元に戻します。消音に必要な無音 AudioTrack は使いますが、メディア音量と audio focus は変更しないため、YouTube などのバックグラウンド再生を止めにくい設計です。
+- A: その代わり、PiP やバックグラウンド再生などで他アプリがメディア音声を出し続けている場合、メディア経路を触らないためカメラ音を抑制できない場合があります。
 
 **Q: インターネット接続は必要ですか？**
 - A: 不要です。完全にオフライン動作します。
@@ -135,14 +143,16 @@ nix develop --command adb shell pm grant dev.serika.camerasilencer android.permi
 - A: Foreground service の常駐分の消費はあります。無音 AudioTrack と音声減衰処理はカメラ使用中だけ動きます。
 
 **Q: 特別な権限は必要ですか？**
-- A: カメラ権限、アクセシビリティ権限、使用状況アクセス、オーバーレイ、DND/通知ポリシーアクセスは使いません。
+- A: 必須ではありません。使用状況アクセスを許可すると前面アプリがカメラアプリか確認でき、顔認証などの誤検知を避けやすくなります。許可しない場合は画面オン/ロック解除イベントを使う推定 fallback で動作します。カメラ権限、アクセシビリティ権限、オーバーレイ、DND/通知ポリシーアクセスは使いません。
 
 ## トラブルシューティング
 
 ### シャッター音が消えない
 
 - 端末やカメラアプリの音声実装により、通常権限だけでは抑制できない場合があります
+- Usage Access が未許可の場合、画面オン/ロック解除イベントを使う推定 fallback で動作するため、顔認証やロック画面ショートカットを完全には判別できない場合があります
 - 他アプリのバックグラウンド再生を止めないため、メディア音量や audio focus は変更しません。その経路で鳴るカメラアプリでは抑制できない場合があります
+- PiP やバックグラウンド再生中は、メディア再生を維持するためカメラ音を抑制できない場合があります
 - 端末再起動後にカメラを先に起動した場合は、Camera Silencer を起動してからカメラアプリを強制停止し、もう一度カメラを開いてください
 - アプリ内の **「Open camera app info」** からカメラアプリのアプリ情報を開き、**「強制停止」** を実行できます
 - Pixel の Google Camera で一度効かない状態になった場合も、Google Camera を強制停止してから、Camera Silencer を起動済みの状態でカメラを開き直してください
@@ -160,10 +170,11 @@ nix develop --command adb shell pm grant dev.serika.camerasilencer android.permi
 
 ## 技術詳細
 
-このアプリは、Android の公開オーディオ API のみを使用して、カメラ使用中だけ出力側を制御します：
+このアプリは、Android の公開 API のみを使用して、カメラアプリ使用中だけ出力側を制御します：
 
 - `CameraManager.AvailabilityCallback` でカメラの使用状態を検知
-- 画面オン直後のロック画面カメラは短時間だけ保留し、顔認証などの一瞬のカメラ使用では消音処理を開始しない
+- Usage Access 許可時は `UsageStatsManager` で前面アプリを確認し、カメラ Intent を処理できるアプリが前面のときだけ消音
+- Usage Access 未許可時は画面オン/ロック解除イベントを使う推定 fallback で消音
 - `RECEIVE_BOOT_COMPLETED` で再起動後に auto 系モードの再アーム通知を表示
 - `AudioManager.getRingerMode()` と `RINGER_MODE_CHANGED_ACTION` で消音/バイブ連動
 - `AudioManager` API でシステム系・強制システム系ストリーム音量を一時変更

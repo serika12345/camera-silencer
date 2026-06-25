@@ -2,7 +2,7 @@ package dev.serika.camerasilencer;
 
 import android.app.Notification;
 import android.app.NotificationChannel;
-import android.app.KeyguardManager;
+import android.app.AppOpsManager;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
@@ -10,6 +10,10 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.app.usage.UsageEvents;
+import android.app.usage.UsageStatsManager;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.content.pm.ServiceInfo;
 import android.hardware.camera2.CameraManager;
 import android.media.AudioManager;
@@ -18,10 +22,13 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.Process;
 import android.os.SystemClock;
+import android.provider.MediaStore;
 import android.util.Log;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 public final class CameraGuardService extends Service {
@@ -35,25 +42,32 @@ public final class CameraGuardService extends Service {
     static final String EXTRA_MODE = "mode";
     static final String EXTRA_CAMERA_IN_USE = "camera_in_use";
     static final String EXTRA_RINGER_SILENT = "ringer_silent";
+    static final String EXTRA_USAGE_ACCESS_GRANTED = "usage_access_granted";
+    static final String EXTRA_FOREGROUND_PACKAGE = "foreground_package";
+    static final String EXTRA_FOREGROUND_CAMERA_APP = "foreground_camera_app";
 
     private static final String TAG = "CameraGuardService";
     private static final String CHANNEL_ID = "camera_guard";
     private static final int NOTIFICATION_ID = 1001;
     private static final String STATE_PREFS = "guard_state";
-    private static final long SCREEN_ON_CAMERA_GRACE_MS = 2500L;
+    private static final long FOREGROUND_LOOKBACK_MS = 10000L;
+    private static final long FALLBACK_SCREEN_ON_CAMERA_DECISION_MS = 3000L;
 
     private final Set<String> unavailableCameraIds = new HashSet<>();
+    private final Set<String> cameraAppPackages = new HashSet<>();
+    private final Set<String> fallbackPendingCameraIds = new HashSet<>();
+    private final Set<String> fallbackIgnoredCameraIds = new HashSet<>();
     private Handler mainHandler;
     private HandlerThread callbackThread;
     private Handler callbackHandler;
     private CameraManager cameraManager;
     private AudioManager audioManager;
-    private KeyguardManager keyguardManager;
+    private UsageStatsManager usageStatsManager;
     private AudioSilencer audioSilencer;
     private boolean registered;
     private boolean ringerReceiverRegistered;
     private boolean screenReceiverRegistered;
-    private long lastScreenOnElapsedMillis = Long.MIN_VALUE;
+    private long fallbackDecisionUntilElapsedMillis = Long.MIN_VALUE;
 
     private final Runnable delayedSilencingUpdate = new Runnable() {
         @Override
@@ -68,6 +82,11 @@ public final class CameraGuardService extends Service {
                 public void onCameraUnavailable(String cameraId) {
                     synchronized (unavailableCameraIds) {
                         unavailableCameraIds.add(cameraId);
+                        if (shouldCollectFallbackCameraIds()
+                                && audioSilencer != null
+                                && !audioSilencer.isActive()) {
+                            fallbackPendingCameraIds.add(cameraId);
+                        }
                     }
                     Log.w(TAG, "Camera unavailable: " + cameraId);
                     updateSilencing();
@@ -77,6 +96,8 @@ public final class CameraGuardService extends Service {
                 public void onCameraAvailable(String cameraId) {
                     synchronized (unavailableCameraIds) {
                         unavailableCameraIds.remove(cameraId);
+                        fallbackPendingCameraIds.remove(cameraId);
+                        fallbackIgnoredCameraIds.remove(cameraId);
                     }
                     Log.w(TAG, "Camera available: " + cameraId);
                     updateSilencing();
@@ -94,10 +115,32 @@ public final class CameraGuardService extends Service {
     private final BroadcastReceiver screenReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
+            if (hasUsageAccess(CameraGuardService.this)) {
+                clearFallbackCameraIds();
+                return;
+            }
+
             if (Intent.ACTION_SCREEN_ON.equals(intent.getAction())) {
-                lastScreenOnElapsedMillis = SystemClock.elapsedRealtime();
+                long now = SystemClock.elapsedRealtime();
+                fallbackDecisionUntilElapsedMillis =
+                        now + FALLBACK_SCREEN_ON_CAMERA_DECISION_MS;
+                if (audioSilencer != null && !audioSilencer.isActive()) {
+                    synchronized (unavailableCameraIds) {
+                        fallbackPendingCameraIds.addAll(unavailableCameraIds);
+                    }
+                }
                 Log.w(TAG, "Screen turned on");
-                scheduleSilencingUpdate(SCREEN_ON_CAMERA_GRACE_MS + 50L);
+                scheduleSilencingUpdate(FALLBACK_SCREEN_ON_CAMERA_DECISION_MS + 50L);
+                updateSilencing();
+            } else if (Intent.ACTION_USER_PRESENT.equals(intent.getAction())) {
+                long now = SystemClock.elapsedRealtime();
+                synchronized (unavailableCameraIds) {
+                    if (now < fallbackDecisionUntilElapsedMillis) {
+                        fallbackIgnoredCameraIds.addAll(fallbackPendingCameraIds);
+                    }
+                    fallbackPendingCameraIds.clear();
+                }
+                Log.w(TAG, "User present");
                 updateSilencing();
             }
         }
@@ -140,7 +183,8 @@ public final class CameraGuardService extends Service {
         AudioSilencer.restorePersistedSnapshot(this);
         cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        keyguardManager = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
+        usageStatsManager = (UsageStatsManager) getSystemService(Context.USAGE_STATS_SERVICE);
+        refreshCameraAppPackages();
         callbackThread = new HandlerThread("camera-availability");
         callbackThread.start();
         callbackHandler = new Handler(callbackThread.getLooper());
@@ -230,6 +274,8 @@ public final class CameraGuardService extends Service {
 
         synchronized (unavailableCameraIds) {
             unavailableCameraIds.clear();
+            fallbackPendingCameraIds.clear();
+            fallbackIgnoredCameraIds.clear();
         }
         if (audioSilencer != null) {
             audioSilencer.shutdown();
@@ -238,17 +284,31 @@ public final class CameraGuardService extends Service {
     }
 
     private void updateSilencing() {
+        expireFallbackPendingCameraIds();
         boolean cameraInUse = isCameraInUse();
         boolean shouldSilenceForMode = shouldSilenceForCurrentMode();
-        boolean deferScreenOnCamera = cameraInUse
-                && shouldSilenceForMode
-                && audioSilencer != null
-                && !audioSilencer.isActive()
-                && shouldDeferScreenOnCameraUse();
-        boolean shouldSilence = cameraInUse && shouldSilenceForMode && !deferScreenOnCamera;
+        boolean usageAccessGranted = hasUsageAccess(this);
+        String foregroundPackage = usageAccessGranted ? getForegroundPackage() : null;
+        boolean foregroundCameraApp = foregroundPackage != null
+                && cameraAppPackages.contains(foregroundPackage);
+        boolean fallbackCameraInUse = !usageAccessGranted && isFallbackSilenceableCameraInUse();
+        boolean currentlySilencing = audioSilencer != null && audioSilencer.isActive();
+        boolean shouldSilence = shouldSilenceForMode
+                && cameraInUse
+                && (
+                usageAccessGranted
+                        ? foregroundCameraApp || currentlySilencing
+                        : fallbackCameraInUse || currentlySilencing
+        );
         Log.w(TAG, "updateSilencing cameraInUse=" + cameraInUse
                 + " shouldSilence=" + shouldSilence
-                + " deferScreenOnCamera=" + deferScreenOnCamera
+                + " currentlySilencing=" + currentlySilencing
+                + " usageAccessGranted=" + usageAccessGranted
+                + " foregroundPackage=" + foregroundPackage
+                + " foregroundCameraApp=" + foregroundCameraApp
+                + " fallbackCameraInUse=" + fallbackCameraInUse
+                + " fallbackPending=" + fallbackPendingCameraIds
+                + " fallbackIgnored=" + fallbackIgnoredCameraIds
                 + " mode=" + GuardSettings.getMode(this)
                 + " unavailable=" + unavailableCameraIds);
 
@@ -267,6 +327,8 @@ public final class CameraGuardService extends Service {
 
     private void publishState() {
         boolean active = audioSilencer != null && audioSilencer.isActive();
+        boolean usageAccessGranted = hasUsageAccess(this);
+        String foregroundPackage = usageAccessGranted ? getForegroundPackage() : null;
         getSharedPreferences(STATE_PREFS, MODE_PRIVATE)
                 .edit()
                 .putBoolean(EXTRA_RUNNING, registered)
@@ -279,7 +341,13 @@ public final class CameraGuardService extends Service {
                 .putExtra(EXTRA_SILENCING, active)
                 .putExtra(EXTRA_MODE, GuardSettings.getMode(this))
                 .putExtra(EXTRA_CAMERA_IN_USE, isCameraInUse())
-                .putExtra(EXTRA_RINGER_SILENT, isRingerSilent());
+                .putExtra(EXTRA_RINGER_SILENT, isRingerSilent())
+                .putExtra(EXTRA_USAGE_ACCESS_GRANTED, usageAccessGranted)
+                .putExtra(EXTRA_FOREGROUND_PACKAGE, foregroundPackage)
+                .putExtra(
+                        EXTRA_FOREGROUND_CAMERA_APP,
+                        foregroundPackage != null && cameraAppPackages.contains(foregroundPackage)
+                );
         sendBroadcast(state);
     }
 
@@ -339,6 +407,8 @@ public final class CameraGuardService extends Service {
         String text;
         if (silencing) {
             text = "Audio is temporarily reduced";
+        } else if (cameraInUse && !hasUsageAccess(this)) {
+            text = "Fallback camera detection";
         } else if (cameraInUse && GuardSettings.MODE_FOLLOW_RINGER.equals(GuardSettings.getMode(this))) {
             text = "Ringer is audible; audio is unchanged";
         } else {
@@ -392,7 +462,9 @@ public final class CameraGuardService extends Service {
             return;
         }
 
-        IntentFilter filter = new IntentFilter(Intent.ACTION_SCREEN_ON);
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(Intent.ACTION_SCREEN_ON);
+        filter.addAction(Intent.ACTION_USER_PRESENT);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(screenReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
         } else {
@@ -414,16 +486,6 @@ public final class CameraGuardService extends Service {
         screenReceiverRegistered = false;
     }
 
-    private boolean shouldDeferScreenOnCameraUse() {
-        long elapsed = SystemClock.elapsedRealtime() - lastScreenOnElapsedMillis;
-        if (elapsed < 0 || elapsed >= SCREEN_ON_CAMERA_GRACE_MS || !isKeyguardLocked()) {
-            return false;
-        }
-
-        scheduleSilencingUpdate(SCREEN_ON_CAMERA_GRACE_MS - elapsed + 50L);
-        return true;
-    }
-
     private void scheduleSilencingUpdate(long delayMillis) {
         if (mainHandler == null) {
             return;
@@ -433,16 +495,37 @@ public final class CameraGuardService extends Service {
         mainHandler.postDelayed(delayedSilencingUpdate, Math.max(0L, delayMillis));
     }
 
-    private boolean isKeyguardLocked() {
-        if (keyguardManager == null) {
-            return false;
+    private boolean shouldCollectFallbackCameraIds() {
+        return !hasUsageAccess(this)
+                && SystemClock.elapsedRealtime() < fallbackDecisionUntilElapsedMillis;
+    }
+
+    private void expireFallbackPendingCameraIds() {
+        if (SystemClock.elapsedRealtime() < fallbackDecisionUntilElapsedMillis) {
+            return;
         }
 
-        try {
-            return keyguardManager.isKeyguardLocked();
-        } catch (RuntimeException e) {
-            Log.d(TAG, "isKeyguardLocked failed", e);
+        synchronized (unavailableCameraIds) {
+            fallbackPendingCameraIds.clear();
+        }
+    }
+
+    private boolean isFallbackSilenceableCameraInUse() {
+        synchronized (unavailableCameraIds) {
+            for (String cameraId : unavailableCameraIds) {
+                if (!fallbackPendingCameraIds.contains(cameraId)
+                        && !fallbackIgnoredCameraIds.contains(cameraId)) {
+                    return true;
+                }
+            }
             return false;
+        }
+    }
+
+    private void clearFallbackCameraIds() {
+        synchronized (unavailableCameraIds) {
+            fallbackPendingCameraIds.clear();
+            fallbackIgnoredCameraIds.clear();
         }
     }
 
@@ -493,5 +576,84 @@ public final class CameraGuardService extends Service {
         if (manager != null) {
             manager.createNotificationChannel(channel);
         }
+    }
+
+    private void refreshCameraAppPackages() {
+        cameraAppPackages.clear();
+        addCameraAppPackages(new Intent(MediaStore.ACTION_IMAGE_CAPTURE));
+        addCameraAppPackages(new Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA));
+        addCameraAppPackages(new Intent(MediaStore.ACTION_VIDEO_CAPTURE));
+        addCameraAppPackages(new Intent(MediaStore.INTENT_ACTION_VIDEO_CAMERA));
+        addInstalledPackage("com.google.android.GoogleCamera");
+        Log.w(TAG, "Camera app packages=" + cameraAppPackages);
+    }
+
+    private void addCameraAppPackages(Intent intent) {
+        PackageManager packageManager = getPackageManager();
+        List<ResolveInfo> resolveInfos = packageManager.queryIntentActivities(
+                intent,
+                PackageManager.MATCH_DEFAULT_ONLY
+        );
+        for (ResolveInfo info : resolveInfos) {
+            if (info != null
+                    && info.activityInfo != null
+                    && info.activityInfo.packageName != null
+                    && !"android".equals(info.activityInfo.packageName)
+                    && !getPackageName().equals(info.activityInfo.packageName)) {
+                cameraAppPackages.add(info.activityInfo.packageName);
+            }
+        }
+    }
+
+    private void addInstalledPackage(String packageName) {
+        try {
+            getPackageManager().getPackageInfo(packageName, 0);
+            cameraAppPackages.add(packageName);
+        } catch (PackageManager.NameNotFoundException ignored) {
+        }
+    }
+
+    private String getForegroundPackage() {
+        if (usageStatsManager == null) {
+            return null;
+        }
+
+        long endTime = System.currentTimeMillis();
+        UsageEvents events = usageStatsManager.queryEvents(
+                endTime - FOREGROUND_LOOKBACK_MS,
+                endTime
+        );
+        if (events == null) {
+            return null;
+        }
+
+        String foregroundPackage = null;
+        UsageEvents.Event event = new UsageEvents.Event();
+        while (events.hasNextEvent()) {
+            events.getNextEvent(event);
+            int eventType = event.getEventType();
+            if (eventType == UsageEvents.Event.MOVE_TO_FOREGROUND
+                    || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+                    && eventType == UsageEvents.Event.ACTIVITY_RESUMED)) {
+                foregroundPackage = event.getPackageName();
+            }
+        }
+        return foregroundPackage;
+    }
+
+    static boolean hasUsageAccess(Context context) {
+        Context appContext = context.getApplicationContext();
+        AppOpsManager appOpsManager =
+                (AppOpsManager) appContext.getSystemService(Context.APP_OPS_SERVICE);
+        if (appOpsManager == null) {
+            return false;
+        }
+
+        int mode = appOpsManager.checkOpNoThrow(
+                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                Process.myUid(),
+                appContext.getPackageName()
+        );
+        return mode == AppOpsManager.MODE_ALLOWED;
     }
 }

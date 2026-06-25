@@ -6,7 +6,7 @@ Features:
 - No camera permission
 - No internet permission
 - No accessibility service
-- No usage access
+- Optional minimal Usage Access, only to confirm that a camera app is in the foreground
 - No overlay permission
 - No DND policy access
 - Foreground service restores audio when the camera is released
@@ -15,4 +15,6 @@ Features:
 Limitations:
 - Effectiveness depends on the device, OS build, region configuration, and camera app implementation.
 - Some camera apps may use enforced audio paths that cannot be suppressed reliably with normal app permissions.
+- Without Usage Access, Camera Silencer falls back to screen-on/unlock heuristics and may not perfectly distinguish face unlock from lock-screen camera shortcuts.
+- When another app keeps media audio active, such as Picture-in-Picture or background playback, Camera Silencer may leave camera sounds audible to avoid interrupting that playback.
 - If suppression stops working after the camera app was opened first, force stop the camera app once and start Camera Silencer before opening the camera again.

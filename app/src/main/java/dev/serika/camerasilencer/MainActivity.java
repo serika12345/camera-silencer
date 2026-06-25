@@ -37,6 +37,9 @@ public final class MainActivity extends Activity {
     private boolean silencing;
     private boolean cameraInUse;
     private boolean ringerSilent;
+    private boolean usageAccessGranted;
+    private boolean foregroundCameraApp;
+    private String foregroundPackage;
     private boolean rendering;
     private String mode = GuardSettings.MODE_MANUAL;
 
@@ -47,6 +50,15 @@ public final class MainActivity extends Activity {
             silencing = intent.getBooleanExtra(CameraGuardService.EXTRA_SILENCING, false);
             cameraInUse = intent.getBooleanExtra(CameraGuardService.EXTRA_CAMERA_IN_USE, false);
             ringerSilent = intent.getBooleanExtra(CameraGuardService.EXTRA_RINGER_SILENT, false);
+            usageAccessGranted = intent.getBooleanExtra(
+                    CameraGuardService.EXTRA_USAGE_ACCESS_GRANTED,
+                    CameraGuardService.hasUsageAccess(MainActivity.this)
+            );
+            foregroundCameraApp = intent.getBooleanExtra(
+                    CameraGuardService.EXTRA_FOREGROUND_CAMERA_APP,
+                    false
+            );
+            foregroundPackage = intent.getStringExtra(CameraGuardService.EXTRA_FOREGROUND_PACKAGE);
             String nextMode = intent.getStringExtra(CameraGuardService.EXTRA_MODE);
             mode = nextMode == null ? GuardSettings.getMode(MainActivity.this) : nextMode;
             renderState();
@@ -59,6 +71,7 @@ public final class MainActivity extends Activity {
         setContentView(createContentView());
         running = CameraGuardService.savedRunning(this);
         silencing = CameraGuardService.savedSilencing(this);
+        usageAccessGranted = CameraGuardService.hasUsageAccess(this);
         mode = GuardSettings.getMode(this);
         ensureNotificationPermission();
         handleIntent(getIntent());
@@ -78,6 +91,8 @@ public final class MainActivity extends Activity {
     @Override
     protected void onStart() {
         super.onStart();
+        usageAccessGranted = CameraGuardService.hasUsageAccess(this);
+        renderState();
         IntentFilter filter = new IntentFilter(CameraGuardService.ACTION_STATE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(stateReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
@@ -196,6 +211,11 @@ public final class MainActivity extends Activity {
         notificationSettings.setOnClickListener(v -> openNotificationSettings());
         root.addView(notificationSettings, topMargin(matchWrap(), compactGap));
 
+        Button usageAccessSettings = new Button(this);
+        usageAccessSettings.setText("Usage access settings (optional)");
+        usageAccessSettings.setOnClickListener(v -> openUsageAccessSettings());
+        root.addView(usageAccessSettings, topMargin(matchWrap(), compactGap));
+
         scroller.addView(root);
         return scroller;
     }
@@ -228,6 +248,9 @@ public final class MainActivity extends Activity {
         } else {
             modeDetail = "Manual mode uses the guard toggle and does not start after reboot.";
         }
+        String foregroundText = foregroundPackage == null
+                ? "unknown"
+                : foregroundPackage + (foregroundCameraApp ? " camera" : "");
 
         detailView.setText(
                 modeText + "\n"
@@ -235,7 +258,9 @@ public final class MainActivity extends Activity {
                         + modeDetail + "\n"
                         + "Camera: " + (cameraInUse ? "in use" : "idle")
                         + " / Ringer: " + (ringerSilent ? "silent or vibrate" : "audible") + "\n"
-                        + "No camera, usage access, overlay, accessibility, or internet permission."
+                        + "Usage access: " + (usageAccessGranted ? "granted" : "off, using fallback") + "\n"
+                        + "Foreground: " + foregroundText + "\n"
+                        + "No camera, overlay, accessibility, or internet permission."
         );
     }
 
@@ -252,6 +277,10 @@ public final class MainActivity extends Activity {
         Intent intent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
                 .putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName());
         startActivity(intent);
+    }
+
+    private void openUsageAccessSettings() {
+        startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS));
     }
 
     private void toggleManualGuard() {
