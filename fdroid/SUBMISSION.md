@@ -5,7 +5,7 @@ This repository is prepared for F-Droid-style distribution.
 ## Current App Metadata
 
 - Application ID: `dev.serika.camerasilencer`
-- Current version: `0.1.2`
+- Current version: `0.1.3`
 - Current version code: `3`
 - Source commit: `96a6961bd07314679a9fcaff72e771548d4d1778`
 - F-Droid build subdir: `app`

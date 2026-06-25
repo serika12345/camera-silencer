@@ -1,0 +1,4 @@
+Avoid interrupting media playback during screen wake and face unlock.
+Use optional Usage Access to limit silencing to foreground camera apps.
+Keep fallback camera detection available when Usage Access is off.
+Document Picture-in-Picture and background playback limitations.
