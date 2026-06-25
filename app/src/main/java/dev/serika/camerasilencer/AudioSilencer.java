@@ -22,7 +22,7 @@ final class AudioSilencer {
         Context appContext = context.getApplicationContext();
         audioManager = (AudioManager) appContext.getSystemService(Context.AUDIO_SERVICE);
         prefs = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        outputMixGuard = new OutputMixGuard(appContext);
+        outputMixGuard = new OutputMixGuard();
     }
 
     static void restorePersistedSnapshot(Context context) {
@@ -49,19 +49,16 @@ final class AudioSilencer {
         Snapshot next = Snapshot.capture(audioManager);
         try {
             next.persist(prefs);
-            Log.w(TAG, "Enabling guard: mode=" + next.mode
-                    + " system=" + next.system.volume + "/" + next.system.muted
-                    + " music=" + next.music.volume + "/" + next.music.muted
+            Log.w(TAG, "Enabling guard: system=" + next.system.volume + "/" + next.system.muted
                     + " enforced=" + next.enforced.volume + "/" + next.enforced.muted);
-            audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
             applyMutedStream(AudioManager.STREAM_SYSTEM);
-            applyMutedStream(AudioManager.STREAM_MUSIC);
             applyMutedStream(STREAM_SYSTEM_ENFORCED);
             outputMixGuard.enable();
             snapshot = next;
             Log.w(TAG, "Audio guard enabled");
         } catch (RuntimeException e) {
             Log.w(TAG, "Failed to enable audio guard", e);
+            outputMixGuard.disable();
             next.restore(audioManager);
             prefs.edit().clear().apply();
         }
@@ -69,7 +66,6 @@ final class AudioSilencer {
 
     synchronized void disable() {
         if (snapshot == null || audioManager == null) {
-            outputMixGuard.disable();
             return;
         }
 
@@ -101,44 +97,51 @@ final class AudioSilencer {
     }
 
     private static final class Snapshot {
-        private final int mode;
+        private final Integer mode;
         private final StreamState system;
-        private final StreamState music;
+        private final StreamState legacyMusic;
         private final StreamState enforced;
 
-        private Snapshot(int mode, StreamState system, StreamState music, StreamState enforced) {
+        private Snapshot(
+                Integer mode,
+                StreamState system,
+                StreamState legacyMusic,
+                StreamState enforced
+        ) {
             this.mode = mode;
             this.system = system;
-            this.music = music;
+            this.legacyMusic = legacyMusic;
             this.enforced = enforced;
         }
 
         static Snapshot capture(AudioManager audioManager) {
             return new Snapshot(
-                    audioManager.getMode(),
+                    null,
                     StreamState.capture(audioManager, AudioManager.STREAM_SYSTEM),
-                    StreamState.capture(audioManager, AudioManager.STREAM_MUSIC),
+                    null,
                     StreamState.capture(audioManager, STREAM_SYSTEM_ENFORCED)
             );
         }
 
         static Snapshot load(SharedPreferences prefs) {
+            StreamState legacyMusic = prefs.contains("music.volume") || prefs.contains("music.muted")
+                    ? StreamState.load(prefs, "music", AudioManager.STREAM_MUSIC)
+                    : null;
             return new Snapshot(
-                    prefs.getInt(KEY_MODE, AudioManager.MODE_NORMAL),
+                    prefs.contains(KEY_MODE)
+                            ? prefs.getInt(KEY_MODE, AudioManager.MODE_NORMAL)
+                            : null,
                     StreamState.load(prefs, "system", AudioManager.STREAM_SYSTEM),
-                    StreamState.load(prefs, "music", AudioManager.STREAM_MUSIC),
+                    legacyMusic,
                     StreamState.load(prefs, "enforced", STREAM_SYSTEM_ENFORCED)
             );
         }
 
         void persist(SharedPreferences prefs) {
-            prefs.edit()
+            prefs.edit().clear()
                     .putBoolean(KEY_HAS_SNAPSHOT, true)
-                    .putInt(KEY_MODE, mode)
                     .putInt("system.volume", system.volume)
                     .putBoolean("system.muted", system.muted)
-                    .putInt("music.volume", music.volume)
-                    .putBoolean("music.muted", music.muted)
                     .putInt("enforced.volume", enforced.volume)
                     .putBoolean("enforced.muted", enforced.muted)
                     .apply();
@@ -146,13 +149,17 @@ final class AudioSilencer {
 
         void restore(AudioManager audioManager) {
             system.restore(audioManager);
-            music.restore(audioManager);
+            if (legacyMusic != null) {
+                legacyMusic.restore(audioManager);
+            }
             enforced.restore(audioManager);
 
-            try {
-                audioManager.setMode(mode);
-            } catch (RuntimeException e) {
-                Log.w(TAG, "Failed to restore audio mode", e);
+            if (mode != null) {
+                try {
+                    audioManager.setMode(mode);
+                } catch (RuntimeException e) {
+                    Log.w(TAG, "Failed to restore audio mode", e);
+                }
             }
         }
     }

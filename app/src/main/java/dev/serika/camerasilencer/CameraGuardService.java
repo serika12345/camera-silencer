@@ -2,6 +2,7 @@ package dev.serika.camerasilencer;
 
 import android.app.Notification;
 import android.app.NotificationChannel;
+import android.app.KeyguardManager;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
@@ -16,6 +17,8 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
+import android.os.Looper;
+import android.os.SystemClock;
 import android.util.Log;
 
 import java.util.HashSet;
@@ -37,15 +40,27 @@ public final class CameraGuardService extends Service {
     private static final String CHANNEL_ID = "camera_guard";
     private static final int NOTIFICATION_ID = 1001;
     private static final String STATE_PREFS = "guard_state";
+    private static final long SCREEN_ON_CAMERA_GRACE_MS = 2500L;
 
     private final Set<String> unavailableCameraIds = new HashSet<>();
+    private Handler mainHandler;
     private HandlerThread callbackThread;
     private Handler callbackHandler;
     private CameraManager cameraManager;
     private AudioManager audioManager;
+    private KeyguardManager keyguardManager;
     private AudioSilencer audioSilencer;
     private boolean registered;
     private boolean ringerReceiverRegistered;
+    private boolean screenReceiverRegistered;
+    private long lastScreenOnElapsedMillis = Long.MIN_VALUE;
+
+    private final Runnable delayedSilencingUpdate = new Runnable() {
+        @Override
+        public void run() {
+            updateSilencing();
+        }
+    };
 
     private final CameraManager.AvailabilityCallback availabilityCallback =
             new CameraManager.AvailabilityCallback() {
@@ -73,6 +88,18 @@ public final class CameraGuardService extends Service {
         public void onReceive(Context context, Intent intent) {
             Log.w(TAG, "Ringer mode changed");
             updateSilencing();
+        }
+    };
+
+    private final BroadcastReceiver screenReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (Intent.ACTION_SCREEN_ON.equals(intent.getAction())) {
+                lastScreenOnElapsedMillis = SystemClock.elapsedRealtime();
+                Log.w(TAG, "Screen turned on");
+                scheduleSilencingUpdate(SCREEN_ON_CAMERA_GRACE_MS + 50L);
+                updateSilencing();
+            }
         }
     };
 
@@ -108,10 +135,12 @@ public final class CameraGuardService extends Service {
         super.onCreate();
         Log.w(TAG, "Service created");
         createNotificationChannel();
+        mainHandler = new Handler(Looper.getMainLooper());
         audioSilencer = new AudioSilencer(this);
         AudioSilencer.restorePersistedSnapshot(this);
         cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        keyguardManager = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
         callbackThread = new HandlerThread("camera-availability");
         callbackThread.start();
         callbackHandler = new Handler(callbackThread.getLooper());
@@ -149,6 +178,10 @@ public final class CameraGuardService extends Service {
             callbackThread = null;
         }
         callbackHandler = null;
+        if (mainHandler != null) {
+            mainHandler.removeCallbacks(delayedSilencingUpdate);
+            mainHandler = null;
+        }
         super.onDestroy();
     }
 
@@ -171,6 +204,7 @@ public final class CameraGuardService extends Service {
             }
             registered = true;
             registerRingerModeReceiver();
+            registerScreenReceiver();
             publishState();
             Log.w(TAG, "Camera availability callback registered");
         } catch (RuntimeException e) {
@@ -189,6 +223,10 @@ public final class CameraGuardService extends Service {
         }
         registered = false;
         unregisterRingerModeReceiver();
+        unregisterScreenReceiver();
+        if (mainHandler != null) {
+            mainHandler.removeCallbacks(delayedSilencingUpdate);
+        }
 
         synchronized (unavailableCameraIds) {
             unavailableCameraIds.clear();
@@ -201,9 +239,16 @@ public final class CameraGuardService extends Service {
 
     private void updateSilencing() {
         boolean cameraInUse = isCameraInUse();
-        boolean shouldSilence = cameraInUse && shouldSilenceForCurrentMode();
+        boolean shouldSilenceForMode = shouldSilenceForCurrentMode();
+        boolean deferScreenOnCamera = cameraInUse
+                && shouldSilenceForMode
+                && audioSilencer != null
+                && !audioSilencer.isActive()
+                && shouldDeferScreenOnCameraUse();
+        boolean shouldSilence = cameraInUse && shouldSilenceForMode && !deferScreenOnCamera;
         Log.w(TAG, "updateSilencing cameraInUse=" + cameraInUse
                 + " shouldSilence=" + shouldSilence
+                + " deferScreenOnCamera=" + deferScreenOnCamera
                 + " mode=" + GuardSettings.getMode(this)
                 + " unavailable=" + unavailableCameraIds);
 
@@ -340,6 +385,65 @@ public final class CameraGuardService extends Service {
             Log.d(TAG, "Ringer receiver unregister failed", e);
         }
         ringerReceiverRegistered = false;
+    }
+
+    private void registerScreenReceiver() {
+        if (screenReceiverRegistered) {
+            return;
+        }
+
+        IntentFilter filter = new IntentFilter(Intent.ACTION_SCREEN_ON);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(screenReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(screenReceiver, filter);
+        }
+        screenReceiverRegistered = true;
+    }
+
+    private void unregisterScreenReceiver() {
+        if (!screenReceiverRegistered) {
+            return;
+        }
+
+        try {
+            unregisterReceiver(screenReceiver);
+        } catch (RuntimeException e) {
+            Log.d(TAG, "Screen receiver unregister failed", e);
+        }
+        screenReceiverRegistered = false;
+    }
+
+    private boolean shouldDeferScreenOnCameraUse() {
+        long elapsed = SystemClock.elapsedRealtime() - lastScreenOnElapsedMillis;
+        if (elapsed < 0 || elapsed >= SCREEN_ON_CAMERA_GRACE_MS || !isKeyguardLocked()) {
+            return false;
+        }
+
+        scheduleSilencingUpdate(SCREEN_ON_CAMERA_GRACE_MS - elapsed + 50L);
+        return true;
+    }
+
+    private void scheduleSilencingUpdate(long delayMillis) {
+        if (mainHandler == null) {
+            return;
+        }
+
+        mainHandler.removeCallbacks(delayedSilencingUpdate);
+        mainHandler.postDelayed(delayedSilencingUpdate, Math.max(0L, delayMillis));
+    }
+
+    private boolean isKeyguardLocked() {
+        if (keyguardManager == null) {
+            return false;
+        }
+
+        try {
+            return keyguardManager.isKeyguardLocked();
+        } catch (RuntimeException e) {
+            Log.d(TAG, "isKeyguardLocked failed", e);
+            return false;
+        }
     }
 
     private boolean shouldSilenceForCurrentMode() {

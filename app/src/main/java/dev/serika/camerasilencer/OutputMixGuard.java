@@ -1,10 +1,7 @@
 package dev.serika.camerasilencer;
 
-import android.content.Context;
 import android.media.AudioAttributes;
-import android.media.AudioFocusRequest;
 import android.media.AudioFormat;
-import android.media.AudioManager;
 import android.media.AudioTrack;
 import android.media.audiofx.DynamicsProcessing;
 import android.media.audiofx.Equalizer;
@@ -18,22 +15,11 @@ final class OutputMixGuard {
     private static final int CHANNEL_MASK = AudioFormat.CHANNEL_OUT_STEREO;
     private static final int ENCODING = AudioFormat.ENCODING_PCM_16BIT;
 
-    private final Context context;
-    private final AudioManager audioManager;
-    private final AudioManager.OnAudioFocusChangeListener focusListener = focusChange -> { };
-
     private Equalizer equalizer;
     private DynamicsProcessing dynamicsProcessing;
-    private AudioFocusRequest focusRequest;
     private SilentTrackThread silentTrackThread;
 
-    OutputMixGuard(Context context) {
-        this.context = context.getApplicationContext();
-        audioManager = (AudioManager) this.context.getSystemService(Context.AUDIO_SERVICE);
-    }
-
     synchronized void enable() {
-        requestFocus();
         enableEqualizer();
         enableDynamicsProcessing();
         startSilentTrack();
@@ -43,60 +29,10 @@ final class OutputMixGuard {
         stopSilentTrack();
         releaseDynamicsProcessing();
         releaseEqualizer();
-        abandonFocus();
     }
 
     synchronized void release() {
         disable();
-    }
-
-    private void requestFocus() {
-        if (audioManager == null) {
-            return;
-        }
-
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                AudioAttributes attributes = new AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                        .build();
-                focusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
-                        .setAudioAttributes(attributes)
-                        .setOnAudioFocusChangeListener(focusListener)
-                        .setAcceptsDelayedFocusGain(false)
-                        .setWillPauseWhenDucked(false)
-                        .build();
-                int result = audioManager.requestAudioFocus(focusRequest);
-                Log.w(TAG, "Audio focus request result=" + result);
-            } else {
-                int result = audioManager.requestAudioFocus(
-                        focusListener,
-                        AudioManager.STREAM_MUSIC,
-                        AudioManager.AUDIOFOCUS_GAIN_TRANSIENT
-                );
-                Log.w(TAG, "Audio focus request result=" + result);
-            }
-        } catch (RuntimeException e) {
-            Log.w(TAG, "Audio focus request failed", e);
-        }
-    }
-
-    private void abandonFocus() {
-        if (audioManager == null) {
-            return;
-        }
-
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && focusRequest != null) {
-                audioManager.abandonAudioFocusRequest(focusRequest);
-            } else {
-                audioManager.abandonAudioFocus(focusListener);
-            }
-        } catch (RuntimeException e) {
-            Log.d(TAG, "Audio focus abandon failed", e);
-        }
-        focusRequest = null;
     }
 
     private void enableEqualizer() {
@@ -239,6 +175,7 @@ final class OutputMixGuard {
             short[] silence = new short[Math.max(256, bufferBytes / 2)];
 
             try {
+                // Keep this as a plain output stream. Requesting audio focus pauses media apps.
                 AudioAttributes attributes = new AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_MEDIA)
                         .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)

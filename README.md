@@ -126,7 +126,7 @@ nix develop --command adb shell pm grant dev.serika.camerasilencer android.permi
 - A: Android のカメラ使用状態を見て出力側を抑制するため、特定のカメラ package には固定していません。Pixel 10a の Google Camera では確認済みですが、他の端末やカメラアプリでは効き方が変わります。
 
 **Q: 他のアプリに影響しますか？**
-- A: カメラ使用中だけ音声設定を一時的に変更し、終了時に元に戻します。カメラ中に他の音声再生もある場合は、その間だけ影響する可能性があります。
+- A: カメラ使用中だけシステム系の音声設定を一時的に変更し、終了時に元に戻します。消音に必要な無音 AudioTrack は使いますが、メディア音量と audio focus は変更しないため、YouTube などのバックグラウンド再生を止めにくい設計です。
 
 **Q: インターネット接続は必要ですか？**
 - A: 不要です。完全にオフライン動作します。
@@ -142,6 +142,7 @@ nix develop --command adb shell pm grant dev.serika.camerasilencer android.permi
 ### シャッター音が消えない
 
 - 端末やカメラアプリの音声実装により、通常権限だけでは抑制できない場合があります
+- 他アプリのバックグラウンド再生を止めないため、メディア音量や audio focus は変更しません。その経路で鳴るカメラアプリでは抑制できない場合があります
 - 端末再起動後にカメラを先に起動した場合は、Camera Silencer を起動してからカメラアプリを強制停止し、もう一度カメラを開いてください
 - アプリ内の **「Open camera app info」** からカメラアプリのアプリ情報を開き、**「強制停止」** を実行できます
 - Pixel の Google Camera で一度効かない状態になった場合も、Google Camera を強制停止してから、Camera Silencer を起動済みの状態でカメラを開き直してください
@@ -162,11 +163,13 @@ nix develop --command adb shell pm grant dev.serika.camerasilencer android.permi
 このアプリは、Android の公開オーディオ API のみを使用して、カメラ使用中だけ出力側を制御します：
 
 - `CameraManager.AvailabilityCallback` でカメラの使用状態を検知
+- 画面オン直後のロック画面カメラは短時間だけ保留し、顔認証などの一瞬のカメラ使用では消音処理を開始しない
 - `RECEIVE_BOOT_COMPLETED` で再起動後に auto 系モードの再アーム通知を表示
 - `AudioManager.getRingerMode()` と `RINGER_MODE_CHANGED_ACTION` で消音/バイブ連動
-- `AudioManager` API で音声モード・ストリーム音量を一時変更
+- `AudioManager` API でシステム系・強制システム系ストリーム音量を一時変更
 - `AudioEffect` (Equalizer, DynamicsProcessing) で出力を減衰
-- カメラ使用中だけ音量 0 の AudioTrack を再生し、出力経路を維持
+- 消音に必要な音量 0 の AudioTrack をカメラ使用中だけ再生
+- `STREAM_MUSIC` と audio focus は使わず、他アプリの再生停止を避ける
 - Foreground Service でカメラ解放時に自動復旧
 
 詳細は [ソースコード](app/src/main/java/dev/serika/camerasilencer/) をご覧ください。
