@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" tools:node="remove" />
+    <application android:name=".DiagnosticApplication" android:label="@string/diagnostic_app_name" android:icon="@drawable/ic_diagnostic" tools:replace="android:label,android:icon">
+        <activity android:name=".MainActivity" tools:node="remove" />
+        <receiver android:name=".BootReceiver" tools:node="remove" />
+        <activity android:name=".DiagnosticActivity" android:exported="true" android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

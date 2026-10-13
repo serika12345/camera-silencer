@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="diagnostic_app_name">Camera Silencer Diagnostic</string>
+    <string name="diag_instructions">1. Stop the regular app and other silencing apps.\n2. Close the camera and start a test.\n3. Open your camera, take one photo, then return here to report the sound.\nThe test stops after 3 minutes.</string>
+    <string name="diag_privacy">Only this test is recorded (up to 200 events). Device model, OS, camera app and audio API states are included. The latest report stays on this device until replaced or deleted. Review it before copying or sharing. Nothing is uploaded automatically.</string>
+    <string name="diag_confirm">I stopped the regular app and other silencing apps</string>
+    <string name="diag_camera">Camera app to test</string>
+    <string name="diag_start">Start a new test</string>
+    <string name="diag_stop">Stop and restore audio</string>
+    <string name="diag_result">Your observation:</string>
+    <string name="diag_heard">Shutter sound was heard</string>
+    <string name="diag_not_heard">No shutter sound was heard</string>
+    <string name="diag_unsure">Unable to judge / not photographed</string>
+    <string name="diag_not_reported">Not reported</string>
+    <string name="diag_copy">Copy report</string>
+    <string name="diag_share">Share report</string>
+    <string name="diag_issue_open">Copy and open a GitHub issue</string>
+    <string name="diag_delete">Delete saved report</string>
+    <string name="diag_replace">Replace the saved report and start a new test?</string>
+    <string name="diag_no_browser">No browser is available. The report has been copied.</string>
+    <string name="diag_copied">Report copied</string>
+    <string name="diag_ready">Ready to test</string>
+    <string name="diag_watching">Recording: waiting for camera use</string>
+    <string name="diag_detected">Camera detected; silencing not requested</string>
+    <string name="diag_attempting">Attempting to silence; audible result unverified</string>
+    <string name="diag_issue">An audio operation failed or is unavailable. Check the report.</string>
+    <string name="diag_stopping">Stopping and restoring audio…</string>
+    <string name="diag_finished">Test stopped. Report the sound you actually heard.</string>
+    <string name="diag_interrupted">The previous test was interrupted. Its partial report is available.</string>
+    <string name="diag_close_camera">Close the camera before starting.</string>
+    <string name="diag_camera_check">Checking camera availability. If this persists, reopen the app.</string>
+    <string name="diag_unverified">API states do not establish whether the shutter was silenced.</string>
+    <string name="diag_camera_unavailable">Camera availability check failed. Close the camera manually; starting a test will record the error.</string>
+</resources>

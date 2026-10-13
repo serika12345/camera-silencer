@@ -65,6 +65,8 @@ public final class CameraGuardService extends Service {
     private AudioManager audioManager;
     private UsageStatsManager usageStatsManager;
     private AudioSilencer audioSilencer;
+    private GuardSession session;
+    private GuardObserver observer;
     private boolean registered;
     private boolean ringerReceiverRegistered;
     private boolean screenReceiverRegistered;
@@ -89,6 +91,7 @@ public final class CameraGuardService extends Service {
                             fallbackPendingCameraIds.add(cameraId);
                         }
                     }
+                    observer.event("camera", "unavailable id=" + cameraId);
                     Log.w(TAG, "Camera unavailable: " + cameraId);
                     updateSilencing();
                 }
@@ -100,6 +103,7 @@ public final class CameraGuardService extends Service {
                         fallbackPendingCameraIds.remove(cameraId);
                         fallbackIgnoredCameraIds.remove(cameraId);
                     }
+                    observer.event("camera", "available id=" + cameraId);
                     Log.w(TAG, "Camera available: " + cameraId);
                     updateSilencing();
                 }
@@ -178,9 +182,18 @@ public final class CameraGuardService extends Service {
     public void onCreate() {
         super.onCreate();
         Log.w(TAG, "Service created");
+        session = AppDependencies.session(this);
+        observer = session.observer();
+        session.setUpdateListener(() -> {
+            if (registered) {
+                NotificationManager manager = getSystemService(NotificationManager.class);
+                if (manager != null) manager.notify(NOTIFICATION_ID,
+                        buildNotification(isCameraInUse(), audioSilencer != null && audioSilencer.isActive()));
+            }
+        });
         createNotificationChannel();
         mainHandler = new Handler(Looper.getMainLooper());
-        audioSilencer = new AudioSilencer(this);
+        audioSilencer = new AudioSilencer(this, observer);
         AudioSilencer.restorePersistedSnapshot(this);
         cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
@@ -203,7 +216,8 @@ public final class CameraGuardService extends Service {
             return START_NOT_STICKY;
         }
 
-        if (!GuardSettings.shouldRunService(this)) {
+        if (!session.startService(this)
+                || !GuardSettings.shouldRunService(this)) {
             stopGuard();
             stopSelf();
             return START_NOT_STICKY;
@@ -212,7 +226,7 @@ public final class CameraGuardService extends Service {
         startForegroundCompat(buildNotification(false, false));
         startGuard();
         updateSilencing();
-        return START_STICKY;
+        return session.restartMode();
     }
 
     @Override
@@ -230,6 +244,7 @@ public final class CameraGuardService extends Service {
 
     @Override
     public void onDestroy() {
+        session.setUpdateListener(() -> {});
         stopGuard();
         if (callbackThread != null) {
             callbackThread.quitSafely();
@@ -240,6 +255,7 @@ public final class CameraGuardService extends Service {
             mainHandler.removeCallbacks(delayedSilencingUpdate);
             mainHandler = null;
         }
+        session.serviceStopped(this);
         super.onDestroy();
     }
 
@@ -266,6 +282,7 @@ public final class CameraGuardService extends Service {
             publishState();
             Log.w(TAG, "Camera availability callback registered");
         } catch (RuntimeException e) {
+            observer.failure("camera_registration", e);
             Log.e(TAG, "Failed to register camera availability callback", e);
             stopSelf();
         }
@@ -326,6 +343,8 @@ public final class CameraGuardService extends Service {
                 + " mode=" + GuardSettings.getMode(this)
                 + " unavailable=" + unavailableCameraIds);
 
+        session.decision(this, cameraInUse, foregroundCameraApp, usageAccessGranted,
+                foregroundPackage, shouldSilence, currentlySilencing);
         if (shouldSilence) {
             audioSilencer.enable();
         } else {
@@ -399,7 +418,7 @@ public final class CameraGuardService extends Service {
     }
 
     private Notification buildNotification(boolean cameraInUse, boolean silencing) {
-        Intent openIntent = new Intent(this, MainActivity.class);
+        Intent openIntent = new Intent(this, session.activityClass());
         PendingIntent contentIntent = PendingIntent.getActivity(
                 this,
                 0,
@@ -430,6 +449,8 @@ public final class CameraGuardService extends Service {
             text = getString(R.string.mode_status, modeLabel);
         }
 
+        title = session.notificationTitle(this, cameraInUse, silencing, title);
+        text = session.notificationText(this, text);
         Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 ? new Notification.Builder(this, CHANNEL_ID)
                 : new Notification.Builder(this);

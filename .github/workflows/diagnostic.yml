@@ -1,0 +1,90 @@
+name: 検証版
+
+on:
+  push:
+    tags:
+      - 'diagnostic-*'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: 配布用の署名を準備
+        if: startsWith(github.ref, 'refs/tags/diagnostic-')
+        env:
+          KEYSTORE_BASE64: ${{ secrets.DIAGNOSTIC_SIGNING_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.DIAGNOSTIC_SIGNING_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.DIAGNOSTIC_SIGNING_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.DIAGNOSTIC_SIGNING_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$KEYSTORE_BASE64"
+          test -n "$STORE_PASSWORD"
+          test -n "$KEY_ALIAS"
+          test -n "$KEY_PASSWORD"
+          mkdir -p "$RUNNER_TEMP/signing"
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/signing/diagnostic.keystore"
+          echo "DIAGNOSTIC_KEYSTORE_PATH=$RUNNER_TEMP/signing/diagnostic.keystore" >> "$GITHUB_ENV"
+      - name: ビルド
+        env:
+          DIAGNOSTIC_KEYSTORE_PASSWORD: ${{ secrets.DIAGNOSTIC_SIGNING_STORE_PASSWORD }}
+          DIAGNOSTIC_KEY_ALIAS: ${{ secrets.DIAGNOSTIC_SIGNING_KEY_ALIAS }}
+          DIAGNOSTIC_KEY_PASSWORD: ${{ secrets.DIAGNOSTIC_SIGNING_KEY_PASSWORD }}
+        run: nix develop --command gradle :app:assembleDiagnostic
+      - name: APK と検証用ハッシュを用意
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/diagnostic/app-diagnostic.apk dist/camera-silencer-diagnostic.apk
+          cd dist
+          sha256sum camera-silencer-diagnostic.apk > camera-silencer-diagnostic.apk.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: camera-silencer-diagnostic
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/diagnostic-')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: camera-silencer-diagnostic
+          path: dist
+      - name: プレリリースとして公開
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/notes.txt" <<'NOTES'
+          機種相性を調べるための検証版です。通常版とは別アプリとしてインストールされます。
+
+          1. 通常版と他の消音アプリを停止してください。
+          2. 検証版でカメラアプリとモードを選び、検証を開始してください。
+          3. カメラで1枚撮影して戻り、音が鳴ったかを選択してください。
+          4. 診断情報を確認し、「コピーして GitHub の Issue を開く」から報告してください。
+
+          検証は最長3分で停止します。API上の状態は、実際の消音成功を保証しません。
+          NOTES
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --prerelease --latest=false --notes-file "$RUNNER_TEMP/notes.txt"
+            gh release upload "$RELEASE_TAG" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$RELEASE_TAG" dist/* --repo "$GITHUB_REPOSITORY" \
+              --verify-tag --prerelease --latest=false --title "Camera Silencer 検証版 $RELEASE_TAG" \
+              --notes-file "$RUNNER_TEMP/notes.txt"
+          fi

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="diagnostic_app_name">Camera Silencer 검증판</string>
+    <string name="diag_instructions">1. 일반 앱과 다른 음소거 앱을 중지하세요.\n2. 카메라를 닫고 검증을 시작하세요.\n3. 카메라로 사진을 한 장 찍고 돌아와 소리 여부를 선택하세요.\n검증은 최대 3분 후 중지됩니다.</string>
+    <string name="diag_privacy">이번 검증만 최대 200건 기록합니다. 기종, OS, 카메라 앱, 오디오 API 상태를 포함합니다. 최신 결과는 덮어쓰거나 삭제할 때까지 기기에 저장됩니다. 복사·공유 전에 확인하세요. 자동 전송은 없습니다.</string>
+    <string name="diag_confirm">일반 앱과 다른 음소거 앱을 중지했습니다</string>
+    <string name="diag_camera">검증할 카메라 앱</string>
+    <string name="diag_start">새 검증 시작</string>
+    <string name="diag_stop">검증 중지 및 오디오 복원</string>
+    <string name="diag_result">실제 촬영 결과:</string>
+    <string name="diag_heard">셔터 소리가 났음</string>
+    <string name="diag_not_heard">셔터 소리가 나지 않았음</string>
+    <string name="diag_unsure">판단할 수 없음·미촬영</string>
+    <string name="diag_not_reported">미응답</string>
+    <string name="diag_copy">진단 정보 복사</string>
+    <string name="diag_share">진단 정보 공유</string>
+    <string name="diag_issue_open">복사 후 GitHub 이슈 열기</string>
+    <string name="diag_delete">저장된 진단 정보 삭제</string>
+    <string name="diag_replace">저장된 진단 정보를 덮어쓰고 새 검증을 시작할까요?</string>
+    <string name="diag_no_browser">브라우저를 찾을 수 없습니다. 진단 정보는 복사되었습니다.</string>
+    <string name="diag_copied">진단 정보를 복사했습니다</string>
+    <string name="diag_ready">검증 시작 전</string>
+    <string name="diag_watching">기록 중: 카메라 사용 대기</string>
+    <string name="diag_detected">카메라 감지됨: 음소거 시작 조건 미충족</string>
+    <string name="diag_attempting">음소거 시도 중: 실제 소리 미확인</string>
+    <string name="diag_issue">처리 실패 또는 사용할 수 없는 기능이 감지되었습니다. 진단 정보를 확인하세요.</string>
+    <string name="diag_stopping">중지 및 오디오 복원 처리 중…</string>
+    <string name="diag_finished">검증이 중지되었습니다. 실제 촬영 결과를 선택하세요.</string>
+    <string name="diag_interrupted">이전 검증이 중단되었습니다. 중단 전까지의 진단 정보를 확인할 수 있습니다.</string>
+    <string name="diag_close_camera">시작 전에 카메라를 닫으세요.</string>
+    <string name="diag_camera_check">카메라 사용 상태를 확인 중입니다. 계속되면 앱을 다시 여세요.</string>
+    <string name="diag_unverified">API 상태만으로는 실제 음소거 여부를 판단할 수 없습니다.</string>
+    <string name="diag_camera_unavailable">카메라 사용 상태를 확인할 수 없습니다. 카메라를 닫고 검증을 시작하면 오류를 기록할 수 있습니다.</string>
+</resources>

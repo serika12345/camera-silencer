@@ -13,6 +13,14 @@ android {
             System.getenv("ANDROID_KEY_PASSWORD")
     ].every { it != null && !it.isBlank() }
 
+    buildFeatures { buildConfig true }
+    testBuildType project.findProperty("testBuildType") ?: "debug"
+
+    sourceSets {
+        debug.java.srcDir "src/standard/java"
+        release.java.srcDir "src/standard/java"
+    }
+
     defaultConfig {
         applicationId "dev.serika.camerasilencer"
         minSdk 26
@@ -33,6 +41,17 @@ android {
         }
     }
 
+    def diagnosticSigningConfigured = ["DIAGNOSTIC_KEYSTORE_PATH", "DIAGNOSTIC_KEYSTORE_PASSWORD",
+            "DIAGNOSTIC_KEY_ALIAS", "DIAGNOSTIC_KEY_PASSWORD"].every { System.getenv(it) }
+    if (diagnosticSigningConfigured) {
+        signingConfigs.create("diagnostic") {
+            storeFile file(System.getenv("DIAGNOSTIC_KEYSTORE_PATH"))
+            storePassword System.getenv("DIAGNOSTIC_KEYSTORE_PASSWORD")
+            keyAlias System.getenv("DIAGNOSTIC_KEY_ALIAS")
+            keyPassword System.getenv("DIAGNOSTIC_KEY_PASSWORD")
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
@@ -41,6 +60,17 @@ android {
                 signingConfig signingConfigs.release
             }
         }
+    }
+
+    buildTypes.create("diagnostic") {
+        initWith buildTypes.release
+        applicationIdSuffix ".diagnostic"
+        versionNameSuffix "-diagnostic.1"
+        def revision = providers.exec {
+            commandLine "git", "describe", "--always", "--dirty"
+        }.standardOutput.asText.get().trim()
+        buildConfigField "String", "REVISION", "\"${revision}\""
+        signingConfig diagnosticSigningConfigured ? signingConfigs.diagnostic : signingConfigs.debug
     }
 
     compileOptions {

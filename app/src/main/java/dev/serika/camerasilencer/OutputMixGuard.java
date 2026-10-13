@@ -15,6 +15,12 @@ final class OutputMixGuard {
     private static final int CHANNEL_MASK = AudioFormat.CHANNEL_OUT_STEREO;
     private static final int ENCODING = AudioFormat.ENCODING_PCM_16BIT;
 
+    private final GuardObserver observer;
+
+    OutputMixGuard(GuardObserver observer) {
+        this.observer = observer;
+    }
+
     private Equalizer equalizer;
     private DynamicsProcessing dynamicsProcessing;
     private SilentTrackThread silentTrackThread;
@@ -48,15 +54,18 @@ final class OutputMixGuard {
             for (short band = 0; band < bands; band++) {
                 next.setBandLevel(band, minLevel);
             }
-            next.setEnabled(true);
+            int result = next.setEnabled(true);
             equalizer = next;
+            observer.effect("equalizer", next, result);
             Log.w(TAG, "Equalizer enabled bands=" + bands + " minLevel=" + minLevel);
         } catch (Throwable e) {
+            observer.failure("equalizer", e);
             Log.w(TAG, "Equalizer unavailable", e);
         }
     }
 
     private void releaseEqualizer() {
+        observer.effectReleased("equalizer");
         Equalizer old = equalizer;
         equalizer = null;
         if (old == null) {
@@ -115,15 +124,18 @@ final class OutputMixGuard {
             );
             next.setInputGainAllChannelsTo(-100.0f);
             next.setLimiterAllChannelsTo(limiter);
-            next.setEnabled(true);
+            int result = next.setEnabled(true);
             dynamicsProcessing = next;
+            observer.effect("dynamics", next, result);
             Log.w(TAG, "DynamicsProcessing enabled");
         } catch (Throwable e) {
+            observer.failure("dynamics", e);
             Log.w(TAG, "DynamicsProcessing unavailable", e);
         }
     }
 
     private void releaseDynamicsProcessing() {
+        observer.effectReleased("dynamics");
         DynamicsProcessing old = dynamicsProcessing;
         dynamicsProcessing = null;
         if (old == null) {
@@ -147,7 +159,7 @@ final class OutputMixGuard {
             return;
         }
 
-        SilentTrackThread next = new SilentTrackThread();
+        SilentTrackThread next = new SilentTrackThread(observer);
         silentTrackThread = next;
         next.start();
     }
@@ -163,9 +175,13 @@ final class OutputMixGuard {
     private static final class SilentTrackThread extends Thread {
         private volatile boolean running = true;
         private AudioTrack track;
+        private final GuardObserver observer;
+        private final long diagnosticToken;
 
-        SilentTrackThread() {
+        SilentTrackThread(GuardObserver observer) {
             super("silent-audio-track");
+            this.observer = observer;
+            diagnosticToken = observer.token();
         }
 
         @Override
@@ -193,14 +209,17 @@ final class OutputMixGuard {
                         .setBufferSizeInBytes(bufferBytes)
                         .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
                         .build();
-                track.setVolume(0.0f);
+                int volumeResult = track.setVolume(0.0f);
                 track.play();
+                observer.track(diagnosticToken, track, volumeResult);
                 Log.w(TAG, "Silent AudioTrack started bufferBytes=" + bufferBytes);
 
                 while (running && track.getPlayState() == AudioTrack.PLAYSTATE_PLAYING) {
-                    track.write(silence, 0, silence.length, AudioTrack.WRITE_BLOCKING);
+                    int written = track.write(silence, 0, silence.length, AudioTrack.WRITE_BLOCKING);
+                    if (running && !observer.write(diagnosticToken, written)) break;
                 }
             } catch (Throwable e) {
+                if (running) observer.trackFailure(diagnosticToken, e);
                 Log.w(TAG, "Silent AudioTrack failed", e);
             } finally {
                 AudioTrack old = track;
@@ -219,6 +238,7 @@ final class OutputMixGuard {
                     } catch (Throwable ignored) {
                     }
                 }
+                observer.trackStopped(diagnosticToken, !running);
                 Log.w(TAG, "Silent AudioTrack stopped");
             }
         }

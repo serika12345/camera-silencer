@@ -46,6 +46,33 @@ nix develop --command gradle :app:assembleRelease
 app/build/outputs/apk/release/app-release-unsigned.apk
 ```
 
+## 機種相性の検証版
+
+検証版は `dev.serika.camerasilencer.diagnostic` として通常版と共存できます。カメラ検知と消音処理は共通で、`GuardObserver` と `GuardSession` を注入します。`src/standard` は記録しない実装、`src/diagnostic` は診断画面・記録・検証時間の制限を含む実装です。通常版の APK には検証版の画面・記録実装を含めません。
+
+```sh
+nix develop --command gradle :app:assembleDiagnostic
+nix develop --command adb install -r app/build/outputs/apk/diagnostic/app-diagnostic.apk
+```
+
+通常版と他の消音アプリを停止し、カメラを閉じてから検証を開始します。撮影後に戻り、実際に音が鳴ったかを選択して診断情報をコピー・共有します。検証は最長3分で停止します。API の成功を実際の消音成功として扱いません。プロセスが終了した場合、再起動後の画面で中断前の記録を確認できます。
+
+機種・OS・選択／検知したカメラアプリ・音声 API の状態と、相対時刻付きの直近200件を端末内に保存します。上限を超えた件数も記録します。ユーザーがコピー・共有するまで外部送信せず、最新の結果は新しい検証で上書きするか、画面から削除できます。端末識別番号、他アプリの利用履歴、音声・写真は収集しません。
+
+診断機能の実機テスト：
+
+```sh
+nix develop --command gradle -PtestBuildType=diagnostic \
+  -Pandroid.testInstrumentationRunnerArguments.class=dev.serika.camerasilencer.DiagnosticSessionTest \
+  :app:connectedDiagnosticAndroidTest
+```
+
+GitHub の `diagnostic-*` タグで専用ワークフローがプレリリースを作成します。配布用には固定の署名鍵を使い、`DIAGNOSTIC_SIGNING_KEYSTORE_BASE64`、`DIAGNOSTIC_SIGNING_STORE_PASSWORD`、`DIAGNOSTIC_SIGNING_KEY_ALIAS`、`DIAGNOSTIC_SIGNING_KEY_PASSWORD` の各リポジトリシークレットを設定してください。配布用署名が未設定なら公開用ビルドは失敗します。
+
+ローカルでは `DIAGNOSTIC_KEYSTORE_PATH`、`DIAGNOSTIC_KEYSTORE_PASSWORD`、`DIAGNOSTIC_KEY_ALIAS`、`DIAGNOSTIC_KEY_PASSWORD` を指定できます。未指定時は開発用署名になります。開発用署名と配布用署名が異なる場合は、診断情報を退避して検証版を削除してから入れ直してください。検証版の番号は `app/build.gradle` の `versionNameSuffix` で管理します。
+
+F-Droid 用メタデータは通常リリースの `v数字.数字…` タグだけを対象にします。タグの絞り込みは [F-Droid の UpdateCheckMode](https://f-droid.org/docs/Build_Metadata_Reference/#updatecheckmode) に従います。外部の F-Droid リポジトリ側のメタデータにも、この条件を反映する必要があります。
+
 ## 表示言語
 
 英語・日本語・韓国語に対応し、端末の言語設定に合わせて画面と通知を表示します。Android 13 以降では、システム設定の「アプリの言語」から個別に選択できます。対応する言語がない場合は英語で表示します。

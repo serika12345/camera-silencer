@@ -14,16 +14,22 @@ final class AudioSilencer {
     private static final String KEY_MUTE_ONLY = "mute_only";
     private static final int STREAM_SYSTEM_ENFORCED = 7;
 
+    private final GuardObserver observer;
     private final AudioManager audioManager;
     private final SharedPreferences prefs;
     private final OutputMixGuard outputMixGuard;
     private Snapshot snapshot;
 
     AudioSilencer(Context context) {
+        this(context, AppDependencies.session(context).observer());
+    }
+
+    AudioSilencer(Context context, GuardObserver observer) {
+        this.observer = observer;
         Context appContext = context.getApplicationContext();
         audioManager = (AudioManager) appContext.getSystemService(Context.AUDIO_SERVICE);
         prefs = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        outputMixGuard = new OutputMixGuard();
+        outputMixGuard = new OutputMixGuard(observer);
     }
 
     static void restorePersistedSnapshot(Context context) {
@@ -34,7 +40,7 @@ final class AudioSilencer {
             return;
         }
 
-        Snapshot.load(preferences).restore(manager);
+        Snapshot.load(preferences).restore(manager, AppDependencies.session(context).observer());
         preferences.edit().clear().apply();
     }
 
@@ -47,6 +53,7 @@ final class AudioSilencer {
             return;
         }
 
+        observer.event("guard", "enable_requested");
         Snapshot next = Snapshot.capture(audioManager);
         try {
             next.persist(prefs);
@@ -58,9 +65,10 @@ final class AudioSilencer {
             snapshot = next;
             Log.w(TAG, "Audio guard enabled");
         } catch (RuntimeException e) {
+            observer.failure("guard", e);
             Log.w(TAG, "Failed to enable audio guard", e);
             outputMixGuard.disable();
-            next.restore(audioManager);
+            next.restore(audioManager, observer);
             prefs.edit().clear().apply();
         }
     }
@@ -73,8 +81,9 @@ final class AudioSilencer {
         Snapshot old = snapshot;
         snapshot = null;
         outputMixGuard.disable();
-        old.restore(audioManager);
+        old.restore(audioManager, observer);
         prefs.edit().clear().apply();
+        observer.event("guard", "restore_finished; see stream observations");
         Log.w(TAG, "Audio guard disabled");
     }
 
@@ -84,14 +93,17 @@ final class AudioSilencer {
     }
 
     private void applyMutedStream(int stream) {
+        observer.stream(audioManager, stream, "before_mute");
         // System streams can share the ring volume. Setting their volume also changes ringer mode.
         try {
             if (!audioManager.isStreamMute(stream)) {
                 audioManager.adjustStreamVolume(stream, AudioManager.ADJUST_MUTE, 0);
             }
         } catch (RuntimeException e) {
+            observer.failure("stream_" + stream, e);
             Log.d(TAG, "adjustStreamVolume mute failed for stream " + stream, e);
         }
+        observer.stream(audioManager, stream, "after_mute");
     }
 
     private static final class Snapshot {
@@ -151,16 +163,16 @@ final class AudioSilencer {
                     .apply();
         }
 
-        void restore(AudioManager audioManager) {
+        void restore(AudioManager audioManager, GuardObserver observer) {
             if (muteOnly) {
-                system.restoreMute(audioManager);
-                enforced.restoreMute(audioManager);
+                system.restoreMute(audioManager, observer);
+                enforced.restoreMute(audioManager, observer);
                 return;
             }
 
             int ringerMode = audioManager.getRingerMode();
             try {
-                restoreLegacy(audioManager);
+                restoreLegacy(audioManager, observer);
             } finally {
                 try {
                     if (audioManager.getRingerMode() != ringerMode) {
@@ -172,12 +184,12 @@ final class AudioSilencer {
             }
         }
 
-        private void restoreLegacy(AudioManager audioManager) {
-            system.restore(audioManager);
+        private void restoreLegacy(AudioManager audioManager, GuardObserver observer) {
+            system.restore(audioManager, observer);
             if (legacyMusic != null) {
-                legacyMusic.restore(audioManager);
+                legacyMusic.restore(audioManager, observer);
             }
-            enforced.restore(audioManager);
+            enforced.restore(audioManager, observer);
 
             if (mode != null) {
                 try {
@@ -221,7 +233,7 @@ final class AudioSilencer {
             );
         }
 
-        void restore(AudioManager audioManager) {
+        void restore(AudioManager audioManager, GuardObserver observer) {
             try {
                 audioManager.setStreamVolume(stream, volume, 0);
             } catch (RuntimeException e) {
@@ -239,7 +251,7 @@ final class AudioSilencer {
             }
         }
 
-        void restoreMute(AudioManager audioManager) {
+        void restoreMute(AudioManager audioManager, GuardObserver observer) {
             try {
                 // Keep mute owned by the ringer mode, including changes made while the guard ran.
                 if (!muted
@@ -248,8 +260,10 @@ final class AudioSilencer {
                     audioManager.adjustStreamVolume(stream, AudioManager.ADJUST_UNMUTE, 0);
                 }
             } catch (RuntimeException e) {
+                observer.failure("restore_" + stream, e);
                 Log.w(TAG, "Failed to restore mute state " + stream, e);
             }
+            observer.stream(audioManager, stream, "after_restore");
         }
     }
 }

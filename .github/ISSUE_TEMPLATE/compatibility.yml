@@ -1,0 +1,40 @@
+name: 機種相性の検証結果
+description: 検証版で記録した結果を報告します。
+title: "[機種相性] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        GitHub Releases の検証版で、通常版と他の消音アプリを停止してから記録してください。
+        カメラで撮影して戻り、実際の撮影結果を選択すると診断情報をコピーできます。
+        診断情報には機種・OS・カメラアプリ・音声処理の状態が含まれます。投稿前に内容を確認してください。
+  - type: textarea
+    id: diagnostic
+    attributes:
+      label: 診断情報
+      description: 検証版の「診断情報をコピー」で取得した内容を貼り付けてください。
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 再現操作と期待した動作
+      placeholder: カメラを通常起動して写真を1枚撮影。音が消える想定だったが、シャッター音が鳴った。
+    validations:
+      required: true
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: 発生頻度
+      options:
+        - 毎回
+        - ときどき
+        - 1回だけ確認
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: 補足（任意）
+      description: 日本版・海外版、イヤホン使用、動画撮影、特定の起動方法など、分かる範囲で記載してください。

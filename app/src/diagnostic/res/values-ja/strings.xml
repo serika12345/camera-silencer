@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="diagnostic_app_name">Camera Silencer 検証版</string>
+    <string name="diag_instructions">1. 通常版と他の消音アプリを停止してください。\n2. カメラを閉じて、検証を開始します。\n3. カメラで1枚撮影して戻り、音が鳴ったかを選んでください。\n検証は最長3分で停止します。</string>
+    <string name="diag_privacy">今回の検証だけを最大200件記録します。機種・OS・カメラアプリ・音声APIの状態を含みます。最新の結果は上書きまたは削除するまで端末内に保存します。コピー・共有前に内容を確認してください。自動送信はありません。</string>
+    <string name="diag_confirm">通常版と他の消音アプリを停止しました</string>
+    <string name="diag_camera">検証するカメラアプリ</string>
+    <string name="diag_start">新しい検証を開始</string>
+    <string name="diag_stop">検証を停止して音声を復元</string>
+    <string name="diag_result">実際の撮影結果：</string>
+    <string name="diag_heard">シャッター音が鳴った</string>
+    <string name="diag_not_heard">シャッター音は鳴らなかった</string>
+    <string name="diag_unsure">判断できない・未撮影</string>
+    <string name="diag_not_reported">未回答</string>
+    <string name="diag_copy">診断情報をコピー</string>
+    <string name="diag_share">診断情報を共有</string>
+    <string name="diag_issue_open">コピーして GitHub の Issue を開く</string>
+    <string name="diag_delete">保存した診断情報を削除</string>
+    <string name="diag_replace">保存済みの診断情報を上書きして、新しい検証を開始しますか？</string>
+    <string name="diag_no_browser">ブラウザーが見つかりません。診断情報はコピー済みです。</string>
+    <string name="diag_copied">診断情報をコピーしました</string>
+    <string name="diag_ready">検証開始前</string>
+    <string name="diag_watching">記録中：カメラの使用を待っています</string>
+    <string name="diag_detected">カメラを検知：消音の開始条件を満たしていません</string>
+    <string name="diag_attempting">消音を試行中：実際の音は未確認</string>
+    <string name="diag_issue">処理の失敗・利用できない機能を検出しました。診断情報を確認してください。</string>
+    <string name="diag_stopping">停止・音声復元処理中…</string>
+    <string name="diag_finished">検証は停止しました。実際の撮影結果を選んでください。</string>
+    <string name="diag_interrupted">前回の検証は中断されました。途中までの診断情報を確認できます。</string>
+    <string name="diag_close_camera">開始前にカメラを閉じてください。</string>
+    <string name="diag_camera_check">カメラの使用状態を確認中です。続く場合はアプリを開き直してください。</string>
+    <string name="diag_unverified">APIの状態だけでは、実際に消音できたかは判断できません。</string>
+    <string name="diag_camera_unavailable">カメラの使用状態を確認できません。カメラを閉じて検証を開始すると、エラーを記録できます。</string>
+</resources>
