@@ -46,6 +46,16 @@ nix develop --command gradle :app:assembleRelease
 app/build/outputs/apk/release/app-release-unsigned.apk
 ```
 
+## 実機テスト
+
+USB デバッグを許可した端末で、カメラを閉じ、着信音を通常モード、おやすみモードをオフにして実行します。
+
+```sh
+nix develop --command gradle :app:connectedDebugAndroidTest
+```
+
+着信音モードと音量の維持、消音中のモード変更、保存データからの音声復旧を検証します。テスト中は着信音量とモードを一時変更し、各テストの終了時に戻します。
+
 ## GitHub Actions
 
 `main` への push と pull request で release APK をビルドし、workflow artifact として保存します。
@@ -177,7 +187,7 @@ nix develop --command adb shell appops set dev.serika.camerasilencer GET_USAGE_S
 - Usage Access 未許可時は画面オン/ロック解除イベントを使う推定 fallback で消音
 - `RECEIVE_BOOT_COMPLETED` で再起動後に auto 系モードの再アーム通知を表示
 - `AudioManager.getRingerMode()` と `RINGER_MODE_CHANGED_ACTION` で消音/バイブ連動
-- `AudioManager` API でシステム系・強制システム系ストリーム音量を一時変更
+- `AudioManager` API でシステム系・強制システム系ストリームを一時ミュートし、着信音モードと音量を維持
 - `AudioEffect` (Equalizer, DynamicsProcessing) で出力を減衰
 - 消音に必要な音量 0 の AudioTrack をカメラ使用中だけ再生
 - `STREAM_MUSIC` と audio focus は使わず、他アプリの再生停止を避ける
