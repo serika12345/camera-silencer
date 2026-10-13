@@ -61,8 +61,8 @@ public final class BootReceiver extends BroadcastReceiver {
 
         Notification notification = builder
                 .setSmallIcon(android.R.drawable.ic_menu_camera)
-                .setContentTitle("Re-arm Camera Silencer")
-                .setContentText("Tap to resume camera guarding after reboot")
+                .setContentTitle(context.getString(R.string.boot_notification_title))
+                .setContentText(context.getString(R.string.boot_notification_text))
                 .setContentIntent(contentIntent)
                 .setAutoCancel(true)
                 .setShowWhen(true)
@@ -82,10 +82,10 @@ public final class BootReceiver extends BroadcastReceiver {
 
         NotificationChannel channel = new NotificationChannel(
                 CHANNEL_ID,
-                "Boot re-arm",
+                context.getString(R.string.boot_channel_name),
                 NotificationManager.IMPORTANCE_DEFAULT
         );
-        channel.setDescription("Prompts to re-enable camera guarding after device reboot");
+        channel.setDescription(context.getString(R.string.boot_channel_description));
 
         NotificationManager manager =
                 (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);

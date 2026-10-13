@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">Camera Silencer</string>
+    <string name="mode_button_format" translatable="false">%1$s\n%2$s</string>
+    <string name="status_detail_format" translatable="false">%1$s\n%2$s\n%3$s\n%4$s\n%5$s\n%6$s\n%7$s</string>
+    <string name="guard_mode">Guard mode</string>
+    <string name="mode_follow_ringer">Follow silent/vibrate mode</string>
+    <string name="mode_always">Always silence camera</string>
+    <string name="mode_manual">Manual control</string>
+    <string name="mode_auto_hint">Tap the boot notification or open this app after reboot</string>
+    <string name="mode_manual_hint">Use the guard toggle below; no boot reminder</string>
+    <string name="restore_audio">Restore audio now</string>
+    <string name="recovery_hint">If the camera still makes sound, force stop the camera app once. Then start this guard before opening the camera again.</string>
+    <string name="open_camera_app_info">Open camera app info</string>
+    <string name="notification_settings">Notification settings</string>
+    <string name="usage_access_settings">Usage access settings (optional)</string>
+    <string name="status_silencing">Silencing while camera is active</string>
+    <string name="status_watching">Watching camera use</string>
+    <string name="status_stopped">Stopped</string>
+    <string name="mode_status">Mode: %1$s</string>
+    <string name="boot_prompt_off">Boot re-arm prompt: off</string>
+    <string name="boot_prompt_on">Boot re-arm prompt: on</string>
+    <string name="mode_follow_ringer_detail">Camera audio is reduced only while the phone ringer is silent or vibrate.</string>
+    <string name="mode_always_detail">Camera audio is reduced whenever a camera is active.</string>
+    <string name="mode_manual_detail">Manual mode uses the guard toggle and does not start after reboot.</string>
+    <string name="foreground_unknown">unknown</string>
+    <string name="foreground_camera">%1$s camera</string>
+    <string name="camera_ringer_status">Camera: %1$s / Ringer: %2$s</string>
+    <string name="camera_in_use">in use</string>
+    <string name="camera_idle">idle</string>
+    <string name="ringer_silent">silent or vibrate</string>
+    <string name="ringer_audible">audible</string>
+    <string name="usage_access_status">Usage access: %1$s</string>
+    <string name="usage_access_granted">granted</string>
+    <string name="usage_access_fallback">off, using fallback</string>
+    <string name="foreground_status">Foreground: %1$s</string>
+    <string name="permissions_summary">No camera, overlay, accessibility, or internet permission.</string>
+    <string name="stop_manual_guard">Stop manual guard</string>
+    <string name="start_manual_guard">Start manual guard</string>
+    <string name="notification_silencing">Silencing camera audio</string>
+    <string name="notification_camera_in_use">Camera in use</string>
+    <string name="notification_audio_reduced">Audio is temporarily reduced</string>
+    <string name="notification_fallback">Fallback camera detection</string>
+    <string name="notification_ringer_audible">Ringer is audible; audio is unchanged</string>
+    <string name="stop">Stop</string>
+    <string name="guard_channel_name">Camera guard</string>
+    <string name="guard_channel_description">Shows when camera-use audio guarding is active</string>
+    <string name="boot_notification_title">Re-arm Camera Silencer</string>
+    <string name="boot_notification_text">Tap to resume camera guarding after reboot</string>
+    <string name="boot_channel_name">Boot re-arm</string>
+    <string name="boot_channel_description">Prompts to re-enable camera guarding after device reboot</string>
+</resources>

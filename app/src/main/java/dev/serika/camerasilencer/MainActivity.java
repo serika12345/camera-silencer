@@ -129,7 +129,7 @@ public final class MainActivity extends Activity {
         });
 
         TextView title = new TextView(this);
-        title.setText("Camera Silencer");
+        title.setText(R.string.app_name);
         title.setTextSize(24);
         title.setGravity(Gravity.CENTER);
         root.addView(title, matchWrap());
@@ -147,7 +147,7 @@ public final class MainActivity extends Activity {
         root.addView(detailView, topMargin(matchWrap(), 12));
 
         TextView modeTitle = new TextView(this);
-        modeTitle.setText("Guard mode");
+        modeTitle.setText(R.string.guard_mode);
         modeTitle.setTextSize(16);
         root.addView(modeTitle, topMargin(matchWrap(), 24));
 
@@ -155,22 +155,22 @@ public final class MainActivity extends Activity {
         modeGroup.setOrientation(RadioGroup.VERTICAL);
 
         RadioButton followRinger = createModeButton(
-                "Follow silent/vibrate mode",
-                "Tap the boot notification or open this app after reboot"
+                R.string.mode_follow_ringer,
+                R.string.mode_auto_hint
         );
         followRingerModeId = followRinger.getId();
         modeGroup.addView(followRinger);
 
         RadioButton always = createModeButton(
-                "Always silence camera",
-                "Tap the boot notification or open this app after reboot"
+                R.string.mode_always,
+                R.string.mode_auto_hint
         );
         alwaysModeId = always.getId();
         modeGroup.addView(always);
 
         RadioButton manual = createModeButton(
-                "Manual control",
-                "Use the guard toggle below; no boot reminder"
+                R.string.mode_manual,
+                R.string.mode_manual_hint
         );
         manualModeId = manual.getId();
         modeGroup.addView(manual);
@@ -183,7 +183,7 @@ public final class MainActivity extends Activity {
         root.addView(manualGuardToggleButton, topMargin(matchWrap(), 24));
 
         Button restore = new Button(this);
-        restore.setText("Restore audio now");
+        restore.setText(R.string.restore_audio);
         restore.setOnClickListener(v -> {
             CameraGuardService.stop(this);
             AudioSilencer.restorePersistedSnapshot(this);
@@ -195,24 +195,24 @@ public final class MainActivity extends Activity {
         root.addView(restore, topMargin(matchWrap(), compactGap));
 
         TextView recovery = new TextView(this);
-        recovery.setText("If the camera still makes sound, force stop the camera app once. Then start this guard before opening the camera again.");
+        recovery.setText(R.string.recovery_hint);
         recovery.setTextSize(13);
         recovery.setGravity(Gravity.CENTER);
         recovery.setLineSpacing(0, 1.15f);
         root.addView(recovery, topMargin(matchWrap(), 18));
 
         Button cameraAppInfo = new Button(this);
-        cameraAppInfo.setText("Open camera app info");
+        cameraAppInfo.setText(R.string.open_camera_app_info);
         cameraAppInfo.setOnClickListener(v -> openCameraAppInfo());
         root.addView(cameraAppInfo, topMargin(matchWrap(), compactGap));
 
         Button notificationSettings = new Button(this);
-        notificationSettings.setText("Notification settings");
+        notificationSettings.setText(R.string.notification_settings);
         notificationSettings.setOnClickListener(v -> openNotificationSettings());
         root.addView(notificationSettings, topMargin(matchWrap(), compactGap));
 
         Button usageAccessSettings = new Button(this);
-        usageAccessSettings.setText("Usage access settings (optional)");
+        usageAccessSettings.setText(R.string.usage_access_settings);
         usageAccessSettings.setOnClickListener(v -> openUsageAccessSettings());
         root.addView(usageAccessSettings, topMargin(matchWrap(), compactGap));
 
@@ -229,39 +229,45 @@ public final class MainActivity extends Activity {
         renderManualGuardToggle();
 
         if (silencing) {
-            statusView.setText("Silencing while camera is active");
+            statusView.setText(R.string.status_silencing);
         } else if (running) {
-            statusView.setText("Watching camera use");
+            statusView.setText(R.string.status_watching);
         } else {
-            statusView.setText("Stopped");
+            statusView.setText(R.string.status_stopped);
         }
 
-        String modeText = "Mode: " + GuardSettings.labelFor(mode);
+        String modeText = getString(R.string.mode_status, GuardSettings.labelFor(this, mode));
         String bootText = GuardSettings.MODE_MANUAL.equals(mode)
-                ? "Boot re-arm prompt: off"
-                : "Boot re-arm prompt: on";
+                ? getString(R.string.boot_prompt_off)
+                : getString(R.string.boot_prompt_on);
         String modeDetail;
         if (GuardSettings.MODE_FOLLOW_RINGER.equals(mode)) {
-            modeDetail = "Camera audio is reduced only while the phone ringer is silent or vibrate.";
+            modeDetail = getString(R.string.mode_follow_ringer_detail);
         } else if (GuardSettings.MODE_ALWAYS.equals(mode)) {
-            modeDetail = "Camera audio is reduced whenever a camera is active.";
+            modeDetail = getString(R.string.mode_always_detail);
         } else {
-            modeDetail = "Manual mode uses the guard toggle and does not start after reboot.";
+            modeDetail = getString(R.string.mode_manual_detail);
         }
         String foregroundText = foregroundPackage == null
-                ? "unknown"
-                : foregroundPackage + (foregroundCameraApp ? " camera" : "");
+                ? getString(R.string.foreground_unknown)
+                : foregroundCameraApp
+                        ? getString(R.string.foreground_camera, foregroundPackage)
+                        : foregroundPackage;
 
-        detailView.setText(
-                modeText + "\n"
-                        + bootText + "\n"
-                        + modeDetail + "\n"
-                        + "Camera: " + (cameraInUse ? "in use" : "idle")
-                        + " / Ringer: " + (ringerSilent ? "silent or vibrate" : "audible") + "\n"
-                        + "Usage access: " + (usageAccessGranted ? "granted" : "off, using fallback") + "\n"
-                        + "Foreground: " + foregroundText + "\n"
-                        + "No camera, overlay, accessibility, or internet permission."
-        );
+        detailView.setText(getString(
+                R.string.status_detail_format,
+                modeText,
+                bootText,
+                modeDetail,
+                getString(R.string.camera_ringer_status,
+                        getString(cameraInUse ? R.string.camera_in_use : R.string.camera_idle),
+                        getString(ringerSilent ? R.string.ringer_silent : R.string.ringer_audible)),
+                getString(R.string.usage_access_status,
+                        getString(usageAccessGranted
+                                ? R.string.usage_access_granted : R.string.usage_access_fallback)),
+                getString(R.string.foreground_status, foregroundText),
+                getString(R.string.permissions_summary)
+        ));
     }
 
     private void ensureNotificationPermission() {
@@ -407,10 +413,11 @@ public final class MainActivity extends Activity {
         renderState();
     }
 
-    private RadioButton createModeButton(String title, String description) {
+    private RadioButton createModeButton(int titleResId, int descriptionResId) {
         RadioButton button = new RadioButton(this);
         button.setId(View.generateViewId());
-        button.setText(title + "\n" + description);
+        button.setText(getString(R.string.mode_button_format,
+                getString(titleResId), getString(descriptionResId)));
         button.setTextSize(14);
         return button;
     }
@@ -437,8 +444,8 @@ public final class MainActivity extends Activity {
 
         manualGuardToggleButton.setVisibility(View.VISIBLE);
         manualGuardToggleButton.setText((running || silencing)
-                ? "Stop manual guard"
-                : "Start manual guard");
+                ? R.string.stop_manual_guard
+                : R.string.start_manual_guard);
     }
 
     private int idForMode(String mode) {
