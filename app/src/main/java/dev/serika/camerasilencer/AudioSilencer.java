@@ -11,6 +11,7 @@ final class AudioSilencer {
     private static final String PREFS = "audio_snapshot";
     private static final String KEY_HAS_SNAPSHOT = "has_snapshot";
     private static final String KEY_MODE = "mode";
+    private static final String KEY_MUTE_ONLY = "mute_only";
     private static final int STREAM_SYSTEM_ENFORCED = 7;
 
     private final AudioManager audioManager;
@@ -83,32 +84,32 @@ final class AudioSilencer {
     }
 
     private void applyMutedStream(int stream) {
+        // System streams can share the ring volume. Setting their volume also changes ringer mode.
         try {
-            audioManager.adjustStreamVolume(stream, AudioManager.ADJUST_MUTE, 0);
+            if (!audioManager.isStreamMute(stream)) {
+                audioManager.adjustStreamVolume(stream, AudioManager.ADJUST_MUTE, 0);
+            }
         } catch (RuntimeException e) {
             Log.d(TAG, "adjustStreamVolume mute failed for stream " + stream, e);
-        }
-
-        try {
-            audioManager.setStreamVolume(stream, 0, 0);
-        } catch (RuntimeException e) {
-            Log.d(TAG, "setStreamVolume failed for stream " + stream, e);
         }
     }
 
     private static final class Snapshot {
         private final Integer mode;
+        private final boolean muteOnly;
         private final StreamState system;
         private final StreamState legacyMusic;
         private final StreamState enforced;
 
         private Snapshot(
                 Integer mode,
+                boolean muteOnly,
                 StreamState system,
                 StreamState legacyMusic,
                 StreamState enforced
         ) {
             this.mode = mode;
+            this.muteOnly = muteOnly;
             this.system = system;
             this.legacyMusic = legacyMusic;
             this.enforced = enforced;
@@ -117,6 +118,7 @@ final class AudioSilencer {
         static Snapshot capture(AudioManager audioManager) {
             return new Snapshot(
                     null,
+                    true,
                     StreamState.capture(audioManager, AudioManager.STREAM_SYSTEM),
                     null,
                     StreamState.capture(audioManager, STREAM_SYSTEM_ENFORCED)
@@ -131,6 +133,7 @@ final class AudioSilencer {
                     prefs.contains(KEY_MODE)
                             ? prefs.getInt(KEY_MODE, AudioManager.MODE_NORMAL)
                             : null,
+                    prefs.getBoolean(KEY_MUTE_ONLY, false),
                     StreamState.load(prefs, "system", AudioManager.STREAM_SYSTEM),
                     legacyMusic,
                     StreamState.load(prefs, "enforced", STREAM_SYSTEM_ENFORCED)
@@ -140,6 +143,7 @@ final class AudioSilencer {
         void persist(SharedPreferences prefs) {
             prefs.edit().clear()
                     .putBoolean(KEY_HAS_SNAPSHOT, true)
+                    .putBoolean(KEY_MUTE_ONLY, muteOnly)
                     .putInt("system.volume", system.volume)
                     .putBoolean("system.muted", system.muted)
                     .putInt("enforced.volume", enforced.volume)
@@ -148,6 +152,27 @@ final class AudioSilencer {
         }
 
         void restore(AudioManager audioManager) {
+            if (muteOnly) {
+                system.restoreMute(audioManager);
+                enforced.restoreMute(audioManager);
+                return;
+            }
+
+            int ringerMode = audioManager.getRingerMode();
+            try {
+                restoreLegacy(audioManager);
+            } finally {
+                try {
+                    if (audioManager.getRingerMode() != ringerMode) {
+                        audioManager.setRingerMode(ringerMode);
+                    }
+                } catch (RuntimeException e) {
+                    Log.w(TAG, "Failed to preserve ringer mode during legacy recovery", e);
+                }
+            }
+        }
+
+        private void restoreLegacy(AudioManager audioManager) {
             system.restore(audioManager);
             if (legacyMusic != null) {
                 legacyMusic.restore(audioManager);
@@ -211,6 +236,19 @@ final class AudioSilencer {
                 );
             } catch (RuntimeException e) {
                 Log.d(TAG, "Failed to restore mute state " + stream, e);
+            }
+        }
+
+        void restoreMute(AudioManager audioManager) {
+            try {
+                // Keep mute owned by the ringer mode, including changes made while the guard ran.
+                if (!muted
+                        && audioManager.getRingerMode() == AudioManager.RINGER_MODE_NORMAL
+                        && audioManager.isStreamMute(stream)) {
+                    audioManager.adjustStreamVolume(stream, AudioManager.ADJUST_UNMUTE, 0);
+                }
+            } catch (RuntimeException e) {
+                Log.w(TAG, "Failed to restore mute state " + stream, e);
             }
         }
     }
