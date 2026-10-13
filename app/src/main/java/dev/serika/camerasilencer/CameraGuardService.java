@@ -15,6 +15,7 @@ import android.app.usage.UsageStatsManager;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.content.pm.ServiceInfo;
+import android.content.res.Configuration;
 import android.hardware.camera2.CameraManager;
 import android.media.AudioManager;
 import android.os.Build;
@@ -215,6 +216,19 @@ public final class CameraGuardService extends Service {
     }
 
     @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        createNotificationChannel();
+        if (registered) {
+            NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (manager != null) {
+                manager.notify(NOTIFICATION_ID, buildNotification(
+                        isCameraInUse(), audioSilencer != null && audioSilencer.isActive()));
+            }
+        }
+    }
+
+    @Override
     public void onDestroy() {
         stopGuard();
         if (callbackThread != null) {
@@ -400,19 +414,20 @@ public final class CameraGuardService extends Service {
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
         );
 
-        String modeLabel = GuardSettings.labelFor(GuardSettings.getMode(this));
+        String modeLabel = GuardSettings.labelFor(this, GuardSettings.getMode(this));
         String title = silencing
-                ? "Silencing camera audio"
-                : cameraInUse ? "Camera in use" : "Watching camera use";
+                ? getString(R.string.notification_silencing)
+                : getString(cameraInUse
+                        ? R.string.notification_camera_in_use : R.string.status_watching);
         String text;
         if (silencing) {
-            text = "Audio is temporarily reduced";
+            text = getString(R.string.notification_audio_reduced);
         } else if (cameraInUse && !hasUsageAccess(this)) {
-            text = "Fallback camera detection";
+            text = getString(R.string.notification_fallback);
         } else if (cameraInUse && GuardSettings.MODE_FOLLOW_RINGER.equals(GuardSettings.getMode(this))) {
-            text = "Ringer is audible; audio is unchanged";
+            text = getString(R.string.notification_ringer_audible);
         } else {
-            text = "Mode: " + modeLabel;
+            text = getString(R.string.mode_status, modeLabel);
         }
 
         Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
@@ -426,7 +441,7 @@ public final class CameraGuardService extends Service {
                 .setContentIntent(contentIntent)
                 .setOngoing(true)
                 .setShowWhen(false)
-                .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopIntent)
+                .addAction(android.R.drawable.ic_menu_close_clear_cancel, getString(R.string.stop), stopIntent)
                 .build();
     }
 
@@ -568,10 +583,10 @@ public final class CameraGuardService extends Service {
 
         NotificationChannel channel = new NotificationChannel(
                 CHANNEL_ID,
-                "Camera guard",
+                getString(R.string.guard_channel_name),
                 NotificationManager.IMPORTANCE_LOW
         );
-        channel.setDescription("Shows when camera-use audio guarding is active");
+        channel.setDescription(getString(R.string.guard_channel_description));
         NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (manager != null) {
             manager.createNotificationChannel(channel);

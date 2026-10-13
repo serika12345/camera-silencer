@@ -46,6 +46,12 @@ nix develop --command gradle :app:assembleRelease
 app/build/outputs/apk/release/app-release-unsigned.apk
 ```
 
+## 表示言語
+
+英語・日本語・韓国語に対応し、端末の言語設定に合わせて画面と通知を表示します。Android 13 以降では、システム設定の「アプリの言語」から個別に選択できます。対応する言語がない場合は英語で表示します。
+
+翻訳は `app/src/main/res/values/strings.xml`（既定の英語）、`values-ja/strings.xml`（日本語）、`values-ko/strings.xml`（韓国語）で管理します。文言を追加するときは各言語で同じ名前のリソースを追加し、書式引数の番号と型を揃えてください。対応言語の一覧は `app/src/main/res/xml/locales_config.xml`、ストア掲載文は `fastlane/metadata/android/` にあります。
+
 ## 実機テスト
 
 USB デバッグを許可した端末で、カメラを閉じ、着信音を通常モード、おやすみモードをオフにして実行します。

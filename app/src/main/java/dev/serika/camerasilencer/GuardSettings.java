@@ -44,15 +44,15 @@ final class GuardSettings {
         return !MODE_MANUAL.equals(getMode(context));
     }
 
-    static String labelFor(String mode) {
+    static String labelFor(Context context, String mode) {
         switch (normalize(mode)) {
             case MODE_FOLLOW_RINGER:
-                return "Follow silent/vibrate mode";
+                return context.getString(R.string.mode_follow_ringer);
             case MODE_ALWAYS:
-                return "Always silence camera";
+                return context.getString(R.string.mode_always);
             case MODE_MANUAL:
             default:
-                return "Manual control";
+                return context.getString(R.string.mode_manual);
         }
     }
 
