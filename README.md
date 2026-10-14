@@ -1,240 +1,68 @@
 # Camera Silencer
 
-Android 端末でカメラ利用中にカメラアプリのシャッター音を自動で抑制します。
+カメラ使用中のシャッター音を抑制する Android アプリです。カメラの起動・終了に合わせて音声処理を切り替え、終了時に音声設定を復元します。
 
-カメラを開いた時だけ働き、カメラを閉じると自動的に音声設定が復元されます。余計な操作は不要です。
-
-## 主な特徴
-
-- **自動で動作**: カメラの使用開始時に自動で有効化、終了時に自動で無効化
-- **起動時に再アーム**: Always / Follow silent のモードでは再起動後に再有効化通知を表示
-- **動作モード選択**: 端末の消音/バイブ連動、カメラ中は常時消音、手動制御を選択可能
-- **シンプル**: 手動モードではアプリを開いて手動ガードのトグルを押すだけ
-- **安全**: カメラ権限不要。使用状況アクセスは任意で、許可時は前面カメラアプリ確認に限定。インターネット接続なし
-- **復旧可能**: 音量がおかしくなった場合は、アプリから「Restore audio now」ボタンで復元
-
-## 対応機器
-
-- Android 8.0 以上でインストール可能
-- Android 12 以上推奨
-- **Pixel 10a** で実機検証済み
-- 効果は端末メーカー、地域設定、OS ビルド、カメラアプリの実装に依存します
-
-## ビルド
-
-このリポジトリ直下にcdして下記を実行してください。
-
-```sh
-nix develop --command gradle :app:assembleDebug
-```
-
-生成される debug APK:
-
-```text
-app/build/outputs/apk/debug/app-debug.apk
-```
-
-F-Droid 系の配布・検証向け release APK:
-
-```sh
-nix develop --command gradle :app:assembleRelease
-```
-
-署名鍵を指定しない場合、生成される APK は unsigned です。F-Droid 本家のようにリポジトリ側でビルドして署名する配布形態では、この状態が前提になります。
-
-```text
-app/build/outputs/apk/release/app-release-unsigned.apk
-```
-
-## 機種相性の検証版
-
-検証版は `dev.serika.camerasilencer.diagnostic` として通常版と共存できます。カメラ検知と消音処理は共通で、`GuardObserver` と `GuardSession` を注入します。`src/standard` は記録しない実装、`src/diagnostic` は診断画面・記録・検証時間の制限を含む実装です。通常版の APK には検証版の画面・記録実装を含めません。
-
-```sh
-nix develop --command gradle :app:assembleDiagnostic
-nix develop --command adb install -r app/build/outputs/apk/diagnostic/app-diagnostic.apk
-```
-
-通常版と他の消音アプリを停止し、カメラを閉じてから検証を開始します。撮影後に戻り、実際に音が鳴ったかを選択して診断情報をコピー・共有します。検証は最長3分で停止します。API の成功を実際の消音成功として扱いません。プロセスが終了した場合、再起動後の画面で中断前の記録を確認できます。
-
-機種・OS・選択／検知したカメラアプリ・音声 API の状態と、相対時刻付きの直近200件を端末内に保存します。上限を超えた件数も記録します。ユーザーがコピー・共有するまで外部送信せず、最新の結果は新しい検証で上書きするか、画面から削除できます。端末識別番号、他アプリの利用履歴、音声・写真は収集しません。
-
-診断機能の実機テスト：
-
-```sh
-nix develop --command gradle -PtestBuildType=diagnostic \
-  -Pandroid.testInstrumentationRunnerArguments.class=dev.serika.camerasilencer.DiagnosticSessionTest \
-  :app:connectedDiagnosticAndroidTest
-```
-
-通常リリースに検証版を添付する場合は、製品版と同じ `v*` タグをチェックアウトし、下記の配布用署名を指定して `assembleDiagnostic` を実行します。生成した APK を `camera-silencer-v0.1.4-diagnostic.apk` のような名前にし、SHA-256 ファイルとともに同じ GitHub Release に添付します。F-Droid はソースから製品版をビルドするため、添付した検証版 APK は配布対象になりません。
-
-検証版を独立して公開する場合は、GitHub の `diagnostic-*` タグで専用ワークフローがプレリリースを作成します。配布用には固定の署名鍵を使い、`DIAGNOSTIC_SIGNING_KEYSTORE_BASE64`、`DIAGNOSTIC_SIGNING_STORE_PASSWORD`、`DIAGNOSTIC_SIGNING_KEY_ALIAS`、`DIAGNOSTIC_SIGNING_KEY_PASSWORD` の各リポジトリシークレットを設定してください。配布用署名が未設定なら公開用ビルドは失敗します。独立したタグを使う前に、F-Droid 本家の `UpdateCheckMode` を製品版のタグに限定してください。
-
-ローカルでは `DIAGNOSTIC_KEYSTORE_PATH`、`DIAGNOSTIC_KEYSTORE_PASSWORD`、`DIAGNOSTIC_KEY_ALIAS`、`DIAGNOSTIC_KEY_PASSWORD` を指定できます。未指定時は開発用署名になります。開発用署名と配布用署名が異なる場合は、診断情報を退避して検証版を削除してから入れ直してください。検証版の番号は `app/build.gradle` の `versionNameSuffix` で管理します。
-
-F-Droid 用メタデータは通常リリースの `v数字.数字…` タグだけを対象にします。タグの絞り込みは [F-Droid の UpdateCheckMode](https://f-droid.org/docs/Build_Metadata_Reference/#updatecheckmode) に従います。外部の F-Droid リポジトリ側のメタデータにも、この条件を反映する必要があります。
-
-## 表示言語
-
-英語・日本語・韓国語に対応し、端末の言語設定に合わせて画面と通知を表示します。Android 13 以降では、システム設定の「アプリの言語」から個別に選択できます。対応する言語がない場合は英語で表示します。
-
-翻訳は `app/src/main/res/values/strings.xml`（既定の英語）、`values-ja/strings.xml`（日本語）、`values-ko/strings.xml`（韓国語）で管理します。文言を追加するときは各言語で同じ名前のリソースを追加し、書式引数の番号と型を揃えてください。対応言語の一覧は `app/src/main/res/xml/locales_config.xml`、ストア掲載文は `fastlane/metadata/android/` にあります。
-
-## 実機テスト
-
-USB デバッグを許可した端末で、カメラを閉じ、着信音を通常モード、おやすみモードをオフにして実行します。
-
-```sh
-nix develop --command gradle :app:connectedDebugAndroidTest
-```
-
-着信音モードと音量の維持、消音中のモード変更、保存データからの音声復旧を検証します。テスト中は着信音量とモードを一時変更し、各テストの終了時に戻します。
-
-## GitHub Actions
-
-`main` への push と pull request で release APK をビルドし、workflow artifact として保存します。
-
-`v*` タグを push すると、同じ release APK と SHA-256 ファイルを GitHub Releases に配置します。
-
-```sh
-git tag v0.1.3
-git push origin v0.1.3
-```
-
-Actions 画面から `Android` workflow を手動実行し、`release_tag` に `v0.1.3` のようなタグを指定して Release を作成することもできます。`release_tag` を空にした場合はビルドのみ実行します。
-
-GitHub Releases に直接インストール可能な signed APK を置きたい場合は、リポジトリ secrets に以下を設定してください。未設定の場合は F-Droid 系の署名処理向けに `release-unsigned` APK を配置します。
-
-- `ANDROID_SIGNING_KEYSTORE_BASE64`
-- `ANDROID_SIGNING_STORE_PASSWORD`
-- `ANDROID_SIGNING_KEY_ALIAS`
-- `ANDROID_SIGNING_KEY_PASSWORD`
-
-## F-Droid 系配布
-
-このリポジトリは F-Droid 系の配布を想定して、以下を含めています。
-
-- `assembleRelease` で unsigned release APK を生成
-- F-Droid/IzzyOnDroid 系が参照できる Fastlane metadata: `fastlane/metadata/android/`
-- fdroiddata へ提出するための下書き metadata: `fdroid/metadata/dev.serika.camerasilencer.yml`
-- Play Services、Firebase、広告、解析 SDK、外部通信なし
-
-F-Droid 本家へ提出する場合は、`fdroid/metadata/dev.serika.camerasilencer.yml` を fdroiddata 側の `metadata/dev.serika.camerasilencer.yml` として調整し、タグ `v0.1.3` 以降をビルド対象にしてください。
+Android 8.0 以上に対応し、Pixel 10a の Google カメラで動作を確認しています。消音の効果は機種、地域設定、OS、カメラアプリによって異なります。
 
 ## インストール
 
-```sh
-nix develop --command adb install -r app/build/outputs/apk/debug/app-debug.apk
-nix develop --command adb shell am start -n dev.serika.camerasilencer/.MainActivity --ez start_guard true
-```
+通常版は [F-Droid](https://f-droid.org/packages/dev.serika.camerasilencer/) からインストールできます。
 
-Android 13 以上で通知権限を手動付与する場合:
-
-```sh
-nix develop --command adb shell pm grant dev.serika.camerasilencer android.permission.POST_NOTIFICATIONS
-```
-
-より正確なカメラアプリ判定のために Usage Access を許可できます。テスト端末で adb から付与する場合:
-
-```sh
-nix develop --command adb shell appops set dev.serika.camerasilencer GET_USAGE_STATS allow
-```
-
-その後、カメラアプリを開いて動作確認します。
+機種相性の報告に使う検証版は [GitHub Releases](https://github.com/serika12345/camera-silencer/releases) からインストールできます。
 
 ## 使い方
 
-### モード
+1. Camera Silencer を開き、消音モードを選びます。
+2. 「手動で操作」を選んだ場合は「手動の消音を開始」を押します。
+3. カメラを開いて試し撮りし、シャッター音を確認します。
 
-- **Follow silent/vibrate mode**: 端末が消音またはバイブのときだけ、カメラ使用中に音声を抑制します。再起動後は通知をタップするか、アプリを開くと再有効化します。
-- **Always silence camera**: 端末の音量状態に関係なく、カメラ使用中は音声を抑制します。再起動後は通知をタップするか、アプリを開くと再有効化します。
-- **Manual control**: 手動ガードのトグルをオンにしたときだけ監視します。再起動後の通知は出しません。
+| モード | 動作 |
+| --- | --- |
+| サイレント・バイブに連動 | 端末がサイレントまたはバイブの間、カメラ使用時に消音処理を行います。 |
+| カメラ使用中は常に消音 | 着信音モードにかかわらず、カメラ使用時に消音処理を行います。 |
+| 手動で操作 | ボタンでカメラの監視を開始・停止します。消音処理はカメラ使用中に働きます。 |
 
-### 手動モードの有効化
+停止するには、通知の「停止」または手動モードの「手動の消音を停止」を押します。
 
-1. **Camera Silencer** を開く
-2. 必要なら **Usage access settings** を開き、Camera Silencer の使用状況アクセスを許可する
-3. **Manual control** を選ぶ
-4. 手動ガードのトグルをタップして **「Start manual guard」** から **「Stop manual guard」** に切り替える
-5. ステータスに **「Watching camera use」** と表示されたら準備完了
-6. カメラアプリを開く → シャッター音が消えます
+端末の再起動後は、連動・常時モードでは通知をタップするかアプリを開いて再開します。手動モードではアプリの開始ボタンを押します。
 
-### 無効化
+### 使用状況へのアクセス
 
-- Manual control では手動ガードのトグルを **「Stop manual guard」** から **「Start manual guard」** に戻すと監視を止めます
-- Always / Follow silent のモードでは、アプリを終了しても Foreground 通知と監視は残ります
-- 端末再起動後は、通知をタップするかアプリを開いて再アームしてください
+「使用状況へのアクセス設定（任意）」で許可すると、前面のアプリを確認してカメラアプリを判別します。顔認証などのカメラ使用との区別に役立ちます。
 
-### 音量がおかしくなった
+許可前は、カメラの使用状態と画面の点灯・ロック解除から判定します。
 
-1. アプリを開く
-2. **「Restore audio now」** をタップ
-3. 音量設定が元に戻ります
+### 表示言語
 
-## よくある質問
+英語・日本語・韓国語に対応し、端末の言語設定に合わせて画面と通知を表示します。その他の言語設定では英語を使います。Android 13 以降では、システム設定の「アプリの言語」から選択できます。
 
-**Q: どのカメラアプリに対応していますか？**
-- A: Android のカメラ使用状態を見て出力側を抑制するため、特定のカメラ package には固定していません。Pixel 10a の Google Camera では確認済みですが、他の端末やカメラアプリでは効き方が変わります。
+## 動作上の制約と対処
 
-**Q: 他のアプリに影響しますか？**
-- A: カメラ使用中だけシステム系の音声設定を一時的に変更し、終了時に元に戻します。消音に必要な無音 AudioTrack は使いますが、メディア音量と audio focus は変更しないため、YouTube などのバックグラウンド再生を止めにくい設計です。
-- A: その代わり、PiP やバックグラウンド再生などで他アプリがメディア音声を出し続けている場合、メディア経路を触らないためカメラ音を抑制できない場合があります。
+画面の「消音中」は音声処理の動作状態を示します。実際の消音効果は、試し撮りで確認してください。
 
-**Q: インターネット接続は必要ですか？**
-- A: 不要です。完全にオフライン動作します。
+| 症状・状況 | 対処・制約 |
+| --- | --- |
+| シャッター音が鳴る | 「カメラのアプリ情報を開く」からカメラを強制停止し、Camera Silencer の監視を開始してからカメラを開き直してください。音が鳴り続ける場合は検証版で報告できます。 |
+| メディア再生中や一時停止直後にシャッター音が鳴る | 音声の出力経路による制約です。再生を停止し、時間を置いてから撮影してください。必要な待ち時間と効果は端末・再生アプリに依存します。[Issue #5](https://github.com/serika12345/camera-silencer/issues/5)で扱っています。 |
+| 音量や着信音モードが変わった | 「音声設定を今すぐ復元」を押してください。その後、端末の音量設定を確認してください。 |
 
-**Q: 電池消費は？**
-- A: Foreground service の常駐分の消費はあります。無音 AudioTrack と音声減衰処理はカメラ使用中だけ動きます。
+## 機種相性の報告
 
-**Q: 特別な権限は必要ですか？**
-- A: 必須ではありません。使用状況アクセスを許可すると前面アプリがカメラアプリか確認でき、顔認証などの誤検知を避けやすくなります。許可しない場合は画面オン/ロック解除イベントを使う推定 fallback で動作します。カメラ権限、アクセシビリティ権限、オーバーレイ、DND/通知ポリシーアクセスは使いません。
+[GitHub Releases](https://github.com/serika12345/camera-silencer/releases) の `camera-silencer-<version>-diagnostic.apk` を使います。検証版は通常版と共存する別アプリです。
 
-## トラブルシューティング
+1. 通常版と他の消音アプリを停止し、カメラを閉じます。
+2. 検証版でカメラアプリとモードを選び、検証を開始します。
+3. 撮影後に検証版へ戻り、実際に音が鳴ったかを選びます。
+4. 診断情報を確認し、「コピーして GitHub の Issue を開く」から報告します。
 
-### シャッター音が消えない
+検証は最長3分で停止します。音声 API の状態と、利用者が確認したシャッター音の有無を、それぞれ記録します。アプリが途中で終了した場合も、次回起動時に中断前の記録を確認できます。
 
-- 端末やカメラアプリの音声実装により、通常権限だけでは抑制できない場合があります
-- Usage Access が未許可の場合、画面オン/ロック解除イベントを使う推定 fallback で動作するため、顔認証やロック画面ショートカットを完全には判別できない場合があります
-- 他アプリのバックグラウンド再生を止めないため、メディア音量や audio focus は変更しません。その経路で鳴るカメラアプリでは抑制できない場合があります
-- PiP やバックグラウンド再生中は、メディア再生を維持するためカメラ音を抑制できない場合があります
-- 端末再起動後にカメラを先に起動した場合は、Camera Silencer を起動してからカメラアプリを強制停止し、もう一度カメラを開いてください
-- アプリ内の **「Open camera app info」** からカメラアプリのアプリ情報を開き、**「強制停止」** を実行できます
-- Pixel の Google Camera で一度効かない状態になった場合も、Google Camera を強制停止してから、Camera Silencer を起動済みの状態でカメラを開き直してください
-- 端末を再起動してから再度試してください
-- アプリログで詳細を確認：
-  ```sh
-  nix develop --command adb logcat -v time -s BootReceiver CameraGuardService AudioSilencer OutputMixGuard
-  ```
+記録する内容は機種・OS、選択／検知したカメラアプリ、音声 API の状態、相対時刻付きの直近200件の診断イベントと省略件数です。最新の検証結果を端末内に保存し、次の検証で上書きします。画面から削除することもできます。報告は利用者によるコピー・共有で行います。
 
-### 音量が戻らない
+## 開発
 
-- アプリを開いて **「Restore audio now」** をタップ
-- または端末を再起動してください
-- 復旧できない場合は設定 > 音量 から手動調整してください
-
-## 技術詳細
-
-このアプリは、Android の公開 API のみを使用して、カメラアプリ使用中だけ出力側を制御します：
-
-- `CameraManager.AvailabilityCallback` でカメラの使用状態を検知
-- Usage Access 許可時は `UsageStatsManager` で前面アプリを確認し、カメラ Intent を処理できるアプリが前面のときだけ消音
-- Usage Access 未許可時は画面オン/ロック解除イベントを使う推定 fallback で消音
-- `RECEIVE_BOOT_COMPLETED` で再起動後に auto 系モードの再アーム通知を表示
-- `AudioManager.getRingerMode()` と `RINGER_MODE_CHANGED_ACTION` で消音/バイブ連動
-- `AudioManager` API でシステム系・強制システム系ストリームを一時ミュートし、着信音モードと音量を維持
-- `AudioEffect` (Equalizer, DynamicsProcessing) で出力を減衰
-- 消音に必要な音量 0 の AudioTrack をカメラ使用中だけ再生
-- `STREAM_MUSIC` と audio focus は使わず、他アプリの再生停止を避ける
-- Foreground Service でカメラ解放時に自動復旧
-
-詳細は [ソースコード](app/src/main/java/dev/serika/camerasilencer/) をご覧ください。
+ビルド・テスト・リリースの手順は [開発マニュアル](DEVELOPMENT.md) を参照してください。
 
 ## ライセンス
 
 MIT License
-
-## 注意
-
-- 端末の地域設定や OS ビルドにより動作が異なる場合があります
-- サードパーティ製カメラアプリには非対応の場合があります
