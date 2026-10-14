@@ -67,7 +67,9 @@ nix develop --command gradle -PtestBuildType=diagnostic \
   :app:connectedDiagnosticAndroidTest
 ```
 
-GitHub の `diagnostic-*` タグで専用ワークフローがプレリリースを作成します。配布用には固定の署名鍵を使い、`DIAGNOSTIC_SIGNING_KEYSTORE_BASE64`、`DIAGNOSTIC_SIGNING_STORE_PASSWORD`、`DIAGNOSTIC_SIGNING_KEY_ALIAS`、`DIAGNOSTIC_SIGNING_KEY_PASSWORD` の各リポジトリシークレットを設定してください。配布用署名が未設定なら公開用ビルドは失敗します。
+通常リリースに検証版を添付する場合は、製品版と同じ `v*` タグをチェックアウトし、下記の配布用署名を指定して `assembleDiagnostic` を実行します。生成した APK を `camera-silencer-v0.1.4-diagnostic.apk` のような名前にし、SHA-256 ファイルとともに同じ GitHub Release に添付します。F-Droid はソースから製品版をビルドするため、添付した検証版 APK は配布対象になりません。
+
+検証版を独立して公開する場合は、GitHub の `diagnostic-*` タグで専用ワークフローがプレリリースを作成します。配布用には固定の署名鍵を使い、`DIAGNOSTIC_SIGNING_KEYSTORE_BASE64`、`DIAGNOSTIC_SIGNING_STORE_PASSWORD`、`DIAGNOSTIC_SIGNING_KEY_ALIAS`、`DIAGNOSTIC_SIGNING_KEY_PASSWORD` の各リポジトリシークレットを設定してください。配布用署名が未設定なら公開用ビルドは失敗します。独立したタグを使う前に、F-Droid 本家の `UpdateCheckMode` を製品版のタグに限定してください。
 
 ローカルでは `DIAGNOSTIC_KEYSTORE_PATH`、`DIAGNOSTIC_KEYSTORE_PASSWORD`、`DIAGNOSTIC_KEY_ALIAS`、`DIAGNOSTIC_KEY_PASSWORD` を指定できます。未指定時は開発用署名になります。開発用署名と配布用署名が異なる場合は、診断情報を退避して検証版を削除してから入れ直してください。検証版の番号は `app/build.gradle` の `versionNameSuffix` で管理します。
 

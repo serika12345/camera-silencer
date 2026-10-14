@@ -1,0 +1,4 @@
+Preserve silent/vibrate mode and ring volume when enabling or disabling camera silencing.
+Add Japanese and Korean translations and per-app language settings on Android 13 and later.
+A separate diagnostic app is available on GitHub Releases for compatibility reports.
+Silencing may still fail on some devices or camera apps, or immediately after pausing media playback.
