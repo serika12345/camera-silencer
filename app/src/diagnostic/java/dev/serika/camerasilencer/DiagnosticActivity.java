@@ -50,7 +50,7 @@ public final class DiagnosticActivity extends Activity {
     private Button stop;
     private Button copy;
     private Button share;
-    private Button issue;
+    private Button contribute;
     private final List<Button> results = new ArrayList<>();
     private String lastPreview = "";
     private final Runnable refresh = new Runnable() {
@@ -117,10 +117,10 @@ public final class DiagnosticActivity extends Activity {
                     .putExtra(Intent.EXTRA_TEXT, session.report());
             startActivity(Intent.createChooser(send, getString(R.string.diag_share)));
         });
-        issue = button(root, R.string.diag_issue_open, () -> {
+        contribute = button(root, R.string.diag_contribute, () -> {
             copyReport();
             Intent intent = new Intent(Intent.ACTION_VIEW,
-                    Uri.parse("https://github.com/serika12345/camera-silencer/issues/new?template=compatibility.yml"));
+                    Uri.parse("https://github.com/serika12345/camera-silencer/blob/main/CONTRIBUTING.md"));
             try { startActivity(intent); }
             catch (android.content.ActivityNotFoundException e) { Toast.makeText(this, R.string.diag_no_browser, Toast.LENGTH_LONG).show(); }
         });
@@ -226,7 +226,7 @@ public final class DiagnosticActivity extends Activity {
         boolean export = session.hasReport() && !session.recording() && !session.stopping();
         copy.setEnabled(export);
         share.setEnabled(export);
-        issue.setEnabled(export);
+        contribute.setEnabled(export);
         String report = session.report();
         if (!report.equals(lastPreview)) { preview.setText(report); lastPreview = report; }
     }

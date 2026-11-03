@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 不具合修正・機種対応の PR
+    url: https://github.com/serika12345/camera-silencer/blob/main/CONTRIBUTING.md
+    about: 修正を含む PR を直接送ってください。機種情報・再現状況・ログの添付が必須です。

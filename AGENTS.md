@@ -13,7 +13,7 @@ Camera Silencer は、カメラ使用中に音声処理を行う Java 17 の And
 | `app/src/diagnostic` | 診断画面、記録、検証の開始・終了の管理、検証版の `AppDependencies` |
 | `app/src/androidTest` | 音声状態の維持・復旧を確認する端末上のテスト |
 | `app/src/androidTestDiagnostic` | 診断記録と検証の開始・終了を確認する端末上のテスト |
-| `.github` | Issue・PR テンプレート、ビルド・リリースのワークフロー |
+| `.github` | PR テンプレート、Issue 作成画面から PR への案内、ビルド・リリースのワークフロー |
 | `fastlane/metadata/android` | ストア掲載文、翻訳、変更履歴 |
 | `fdroid` | F-Droid の登録情報の変更案と提出手順 |
 
@@ -59,4 +59,4 @@ nix develop --command gradle -PtestBuildType=diagnostic \
 
 コマンド、ソース構成、ビルドの種類を変更した場合は、開発手順も更新してください。
 
-[CONTRIBUTING.md](CONTRIBUTING.md) と [PR テンプレート](.github/pull_request_template.md) に従ってください。変更内容や規模に制約は設けず、直接 PR を送れます。不具合修正・機種対応の PR には、機種情報、具体的な再現状況、診断情報またはアプリのログの添付が必須です。
+[CONTRIBUTING.md](CONTRIBUTING.md) と [PR テンプレート](.github/pull_request_template.md) に従ってください。変更内容や規模に制約は設けず、直接 PR を送れます。機種固有の問題への対応も、修正を含む PR で受け付けます。不具合修正・機種対応の PR には、機種情報、具体的な再現状況、診断情報またはアプリのログの添付が必須です。

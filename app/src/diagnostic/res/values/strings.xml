@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="diagnostic_app_name">Camera Silencer Diagnostic</string>
-    <string name="diag_instructions">1. Stop the regular app and other silencing apps.\n2. Close the camera and start a test.\n3. Open your camera, take one photo, then return here to report the sound.\nThe test stops after 3 minutes.</string>
+    <string name="diag_instructions">1. Stop the regular app and other silencing apps.\n2. Close the camera and start a test.\n3. Open your camera, take one photo, then return here to select what you heard.\nThe test stops after 3 minutes.\nFor bug fixes or device support, submit a PR with your changes and diagnostic information.</string>
     <string name="diag_privacy">Only this test is recorded (up to 200 events). Device model, OS, camera app and audio API states are included. The latest report stays on this device until replaced or deleted. Review it before copying or sharing. Nothing is uploaded automatically.</string>
     <string name="diag_confirm">I stopped the regular app and other silencing apps</string>
     <string name="diag_camera">Camera app to test</string>
@@ -14,7 +14,7 @@
     <string name="diag_not_reported">Not reported</string>
     <string name="diag_copy">Copy report</string>
     <string name="diag_share">Share report</string>
-    <string name="diag_issue_open">Copy and open a GitHub issue</string>
+    <string name="diag_contribute">Copy and open the PR guide</string>
     <string name="diag_delete">Delete saved report</string>
     <string name="diag_replace">Replace the saved report and start a new test?</string>
     <string name="diag_no_browser">No browser is available. The report has been copied.</string>
